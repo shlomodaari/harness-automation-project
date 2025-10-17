@@ -1,0 +1,34 @@
+# Webhook handler configuration
+
+jenkins:
+  url: "http://jenkins:8080"        # Your Jenkins server URL
+  job_name: "harness-automation"    # Jenkins job name to trigger
+  user: "jenkins_api_user"          # Jenkins username with API access
+  token: "your_jenkins_api_token"   # Jenkins API token
+  crumb: true                       # Whether to use CSRF protection
+
+github:
+  secret: "your_webhook_secret"     # Secret for GitHub webhook verification
+  events:                           # GitHub events to listen for
+    - "repository"
+    - "push"
+
+gitlab:
+  token: "your_gitlab_token"        # GitLab webhook token
+  events:                           # GitLab events to listen for
+    - "project_create"
+    - "push"
+
+server:
+  host: "0.0.0.0"                   # Host to bind webhook server
+  port: 5000                        # Port to listen on
+  debug: false                      # Enable debug logging
+  ssl:
+    enabled: false                  # Enable HTTPS
+    cert: "/path/to/cert.pem"       # SSL certificate path
+    key: "/path/to/key.pem"         # SSL key path
+
+harness:
+  default_account: "your_harness_account_id"    # Default Harness account ID
+  default_api_key: "your_harness_api_key"       # Default Harness API key
+  default_org: "default"                        # Default Harness organization

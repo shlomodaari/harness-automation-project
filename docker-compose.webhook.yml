@@ -1,0 +1,33 @@
+version: '3'
+
+services:
+  webhook-handler:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook
+    ports:
+      - "5000:5000"
+    environment:
+      - JENKINS_URL=${JENKINS_URL:-http://jenkins:8080}
+      - JENKINS_USER=${JENKINS_USER:-admin}
+      - JENKINS_TOKEN=${JENKINS_TOKEN:-your_jenkins_token}
+      - JENKINS_JOB=${JENKINS_JOB:-harness-automation}
+      - GITHUB_SECRET=${GITHUB_SECRET:-your_github_webhook_secret}
+      - GITLAB_TOKEN=${GITLAB_TOKEN:-your_gitlab_token}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - HARNESS_ACCOUNT_ID=${HARNESS_ACCOUNT_ID:-default_account_id}
+      - HARNESS_API_KEY=${HARNESS_API_KEY:-default_api_key}
+      - HARNESS_ORG=${HARNESS_ORG:-default}
+    restart: unless-stopped
+    volumes:
+      - ./webhook-logs:/app/logs
+
+# Example usage:
+# Export environment variables:
+# export JENKINS_URL=http://your-jenkins-url:8080
+# export JENKINS_USER=your-jenkins-user
+# export JENKINS_TOKEN=your-jenkins-token
+# export GITHUB_SECRET=your-github-webhook-secret
+# 
+# Then run:
+# docker-compose -f docker-compose.webhook.yml up -d

@@ -1,0 +1,52 @@
+# Example configuration for Jenkins pipeline
+
+harness:
+  account_id: "<HARNESS_ACCOUNT_ID>"  # Set using Jenkins credentials
+  api_key: "<HARNESS_API_KEY>"        # Set using Jenkins credentials
+  org_id: "default"                   # Your Harness organization ID
+  base_url: "https://app.harness.io"  # Harness API URL
+
+project:
+  repo_name: "jenkins-demo-project"   # Will be auto-filled from Jenkins parameter
+  description: "Project created from Jenkins pipeline"
+
+connectors:
+  cluster_connector: "<+input>"
+  docker_connector: "<+input>"
+  docker_registry_connector: "<+input>"
+  docker_registry: "docker.io"
+  git_connector: "<+input>"
+
+users:
+  developers:
+    - developer@yourcompany.com
+  approvers:
+    - manager@yourcompany.com
+  operators:
+    - ops@yourcompany.com
+
+notifications:
+  slack_webhook: "<+input>"
+  email_domain: "yourcompany.com"
+
+features:
+  git_experience: false
+  create_rbac: true
+  create_pipelines: true
+
+# Pipeline configuration with unlimited pipelines
+pipelines:
+  nonprod:
+    name: "NonProd Deployment"
+    template_ref: "nonprod_deployment_pipeline"
+    version: "v1"
+  
+  prod:
+    name: "Production Deployment"
+    template_ref: "prod_deployment_pipeline"
+    version: "v1"
+  
+  hotfix:
+    name: "Hotfix Pipeline"
+    template_ref: "prod_deployment_pipeline"
+    version: "v1"

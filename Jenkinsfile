@@ -8,7 +8,12 @@
  */
 
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'python:3.9-slim'
+            args '-v $HOME/.cache/pip:/root/.cache/pip'
+        }
+    }
     
     parameters {
         choice(

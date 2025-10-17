@@ -1,0 +1,165 @@
+pipeline:
+  name: PROJECT_NAME_nonprod_pipeline
+  identifier: PROJECT_IDENTIFIER_nonprod_pipeline
+  projectIdentifier: PROJECT_IDENTIFIER
+  orgIdentifier: ORG_IDENTIFIER
+  tags:
+    environment: nonprod
+    automation: "true"
+  properties:
+    ci:
+      codebase:
+        connectorRef: GIT_CONNECTOR_REF
+        repoName: REPO_NAME
+        build: <+input>
+  variables:
+    - name: image_tag
+      type: String
+      description: Docker image tag to deploy
+      required: true
+      value: <+input>
+    - name: namespace
+      type: String
+      description: Kubernetes namespace
+      required: false
+      value: <+input>.default(<PROJECT_NAME>-staging)
+  stages:
+    - stage:
+        name: Build and Test
+        identifier: build_and_test
+        description: Build artifacts and run tests
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Build
+                  identifier: build
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Building application..."
+                      # Add your build commands here
+                      # Example for Maven:
+                      # mvn clean install -DskipTests
+                      # Example for Gradle:
+                      # ./gradlew build -x test
+                      # Example for npm:
+                      # npm install && npm run build
+                  timeout: 10m
+              - step:
+                  type: Run
+                  name: Unit Tests
+                  identifier: unit_tests
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Running unit tests..."
+                      # Add your test commands here
+                      # Example for Maven:
+                      # mvn test
+                      # Example for Gradle:
+                      # ./gradlew test
+                      # Example for npm:
+                      # npm test
+                  timeout: 10m
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build and Push Docker Image
+                  identifier: build_and_push
+                  spec:
+                    connectorRef: DOCKER_REGISTRY_CONNECTOR_REF
+                    repo: DOCKER_REGISTRY/PROJECT_NAME
+                    tags:
+                      - <+pipeline.variables.image_tag>
+                      - latest-staging
+                    dockerfile: Dockerfile
+                  timeout: 10m
+    - stage:
+        name: Deploy to Staging
+        identifier: deploy_staging
+        description: Deploy to staging environment
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: PROJECT_NAME_service
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources:
+                        - identifier: docker_image
+                          type: DockerRegistry
+                          spec:
+                            tag: <+pipeline.variables.image_tag>
+          environment:
+            environmentRef: <+input>
+            deployToAll: false
+            infrastructureDefinitions: <+input>
+          execution:
+            steps:
+              - step:
+                  name: Rolling Deployment
+                  identifier: rollingDeployment
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+              - step:
+                  type: ShellScript
+                  name: Health Check
+                  identifier: health_check
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Running health checks..."
+                          echo "Namespace: <+pipeline.variables.namespace>"
+                          kubectl get pods -n <+pipeline.variables.namespace>
+                          kubectl rollout status deployment/PROJECT_NAME -n <+pipeline.variables.namespace>
+                    environmentVariables: []
+                  timeout: 5m
+            rollbackSteps:
+              - step:
+                  name: Rollback Deployment
+                  identifier: rollbackDeployment
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+  notificationRules:
+    - name: Pipeline Status Notifications
+      identifier: pipeline_notifications
+      pipelineEvents:
+        - type: PipelineFailed
+        - type: PipelineSuccess
+      notificationMethod:
+        type: Email
+        spec:
+          userGroups:
+            - PROJECT_IDENTIFIER_developers
+          recipients:
+            - <+pipeline.triggeredBy.email>

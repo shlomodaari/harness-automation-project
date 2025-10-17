@@ -1,0 +1,185 @@
+# RBAC Configuration Template for Harness Projects
+# This template defines user groups, roles, and resource groups for staging and production
+
+resourceGroups:
+  - name: PROJECT_NAME_staging_resources
+    identifier: PROJECT_IDENTIFIER_staging_resources
+    description: Resources for staging environment
+    orgIdentifier: ORG_IDENTIFIER
+    projectIdentifier: PROJECT_IDENTIFIER
+    resourceFilter:
+      includeAllResources: false
+      resources:
+        - resourceType: ENVIRONMENT
+          identifiers:
+            - staging
+        - resourceType: SERVICE
+          identifiers:
+            - PROJECT_NAME_service
+        - resourceType: PIPELINE
+          identifiers:
+            - PROJECT_IDENTIFIER_nonprod_pipeline
+        - resourceType: INFRASTRUCTURE
+          identifiers:
+            - staging_infra
+
+  - name: PROJECT_NAME-production-resources
+    identifier: PROJECT_IDENTIFIER_prod_resources
+    description: Resources for production environment
+    orgIdentifier: ORG_IDENTIFIER
+    projectIdentifier: PROJECT_IDENTIFIER
+    resourceFilter:
+      includeAllResources: false
+      resources:
+        - resourceType: ENVIRONMENT
+          identifiers:
+            - production
+        - resourceType: SERVICE
+          identifiers:
+            - PROJECT_NAME_service
+        - resourceType: PIPELINE
+          identifiers:
+            - PROJECT_IDENTIFIER_prod_pipeline
+        - resourceType: INFRASTRUCTURE
+          identifiers:
+            - prod_infra_primary
+            - prod_infra_secondary
+
+userGroups:
+  - name: PROJECT_NAME Developers
+    identifier: PROJECT_IDENTIFIER_developers
+    description: Development team members with staging access
+    orgIdentifier: ORG_IDENTIFIER
+    projectIdentifier: PROJECT_IDENTIFIER
+    users:
+      # Users will be added via automation
+      # Format: - email@domain.com
+    notificationConfigs:
+      - type: EMAIL
+        groupEmail: PROJECT_NAME-dev@DOMAIN
+
+  - name: PROJECT_NAME Production Approvers
+    identifier: PROJECT_IDENTIFIER_prod_approvers
+    description: Team members who can approve production deployments
+    orgIdentifier: ORG_IDENTIFIER
+    projectIdentifier: PROJECT_IDENTIFIER
+    users:
+      # Users will be added via automation
+      # Format: - email@domain.com
+    notificationConfigs:
+      - type: EMAIL
+        groupEmail: PROJECT_NAME-prod-approvers@DOMAIN
+
+  - name: PROJECT_NAME Operators
+    identifier: PROJECT_IDENTIFIER_operators
+    description: Operations team with full production access
+    orgIdentifier: ORG_IDENTIFIER
+    projectIdentifier: PROJECT_IDENTIFIER
+    users:
+      # Users will be added via automation
+      # Format: - email@domain.com
+    notificationConfigs:
+      - type: EMAIL
+        groupEmail: PROJECT_NAME-ops@DOMAIN
+
+roles:
+  - name: PROJECT_NAME Staging Developer
+    identifier: PROJECT_IDENTIFIER_staging_developer
+    description: Can execute staging pipelines and view resources
+    orgIdentifier: ORG_IDENTIFIER
+    projectIdentifier: PROJECT_IDENTIFIER
+    permissions:
+      - core_pipeline_view
+      - core_pipeline_execute
+      - core_environment_view
+      - core_service_view
+      - core_infrastructure_view
+      - core_connector_view
+    allowedScopeLevels:
+      - project
+
+  - name: PROJECT_NAME Production Approver
+    identifier: PROJECT_IDENTIFIER_prod_approver
+    description: Can approve production deployments and view resources
+    orgIdentifier: ORG_IDENTIFIER
+    projectIdentifier: PROJECT_IDENTIFIER
+    permissions:
+      - core_pipeline_view
+      - core_pipeline_execute
+      - core_pipeline_approve
+      - core_environment_view
+      - core_service_view
+      - core_infrastructure_view
+    allowedScopeLevels:
+      - project
+
+  - name: PROJECT_NAME Production Operator
+    identifier: PROJECT_IDENTIFIER_prod_operator
+    description: Full production access including deployment and rollback
+    orgIdentifier: ORG_IDENTIFIER
+    projectIdentifier: PROJECT_IDENTIFIER
+    permissions:
+      - core_pipeline_view
+      - core_pipeline_execute
+      - core_pipeline_edit
+      - core_pipeline_delete
+      - core_environment_view
+      - core_environment_access
+      - core_service_view
+      - core_service_access
+      - core_infrastructure_view
+      - core_infrastructure_access
+      - core_connector_view
+    allowedScopeLevels:
+      - project
+
+roleBindings:
+  - resourceGroupIdentifier: PROJECT_IDENTIFIER_staging_resources
+    roleIdentifier: PROJECT_IDENTIFIER_staging_developer
+    userGroupIdentifiers:
+      - PROJECT_IDENTIFIER_developers
+    managedRole: false
+    disabled: false
+
+  - resourceGroupIdentifier: PROJECT_IDENTIFIER_prod_resources
+    roleIdentifier: PROJECT_IDENTIFIER_prod_approver
+    userGroupIdentifiers:
+      - PROJECT_IDENTIFIER_prod_approvers
+    managedRole: false
+    disabled: false
+
+  - resourceGroupIdentifier: PROJECT_IDENTIFIER_prod_resources
+    roleIdentifier: PROJECT_IDENTIFIER_prod_operator
+    userGroupIdentifiers:
+      - PROJECT_IDENTIFIER_operators
+    managedRole: false
+    disabled: false
+
+# Environment-specific access controls
+environmentAccessControls:
+  staging:
+    identifier: staging
+    name: Staging
+    description: Staging environment for PROJECT_NAME
+    type: PreProduction
+    tags:
+      environment: staging
+      project: PROJECT_NAME
+    accessControl:
+      deploymentFreeze: false
+      approvalRequired: false
+
+  production:
+    identifier: production
+    name: Production
+    description: Production environment for PROJECT_NAME
+    type: Production
+    tags:
+      environment: production
+      project: PROJECT_NAME
+    accessControl:
+      deploymentFreeze: false
+      approvalRequired: true
+      approvers:
+        - PROJECT_IDENTIFIER_prod_approvers
+        - PROJECT_IDENTIFIER_operators

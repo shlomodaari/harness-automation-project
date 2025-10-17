@@ -1,0 +1,54 @@
+# Sensitive files - never commit these!
+**/complete_setup_results_*.json
+**/template_setup_results_*.json
+**/harness_setup_results_*.json
+**/*test_results*.txt
+**/*test_results*.json
+
+# Config files with credentials (if you create them)
+my-config.yaml
+*-secrets.yaml
+*.secret.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Test outputs
+debug_*.yaml
+test-run-output.log
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

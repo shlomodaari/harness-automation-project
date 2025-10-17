@@ -1,0 +1,268 @@
+pipeline:
+  name: PROJECT_NAME_prod_pipeline
+  identifier: PROJECT_IDENTIFIER_prod_pipeline
+  projectIdentifier: PROJECT_IDENTIFIER
+  orgIdentifier: ORG_IDENTIFIER
+  tags:
+    environment: production
+    automation: "true"
+  variables:
+    - name: image_tag
+      type: String
+      description: Docker image tag to deploy (from staging)
+      required: true
+      value: <+input>
+    - name: namespace
+      type: String
+      description: Kubernetes namespace
+      required: false
+      value: <+input>.default(PROJECT_NAME_prod)
+    - name: approval_required
+      type: String
+      description: Require manual approval before deployment
+      required: false
+      value: "true"
+  stages:
+    - stage:
+        name: Pre-Production Validation
+        identifier: pre_prod_validation
+        description: Validate image exists and passed staging
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: ShellScript
+                  name: Validate Image Tag
+                  identifier: validate_image_tag
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Validating image tag: <+pipeline.variables.image_tag>"
+                          # Add validation logic here
+                          # Example: Check if image exists in registry
+                          # docker manifest inspect DOCKER_REGISTRY/PROJECT_NAME:<+pipeline.variables.image_tag>
+                    environmentVariables: []
+                  timeout: 5m
+              - step:
+                  type: ShellScript
+                  name: Smoke Tests
+                  identifier: smoke_tests
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Running pre-deployment smoke tests..."
+                          # Add smoke test commands
+                    environmentVariables: []
+                  timeout: 5m
+    - stage:
+        name: Approval Gate
+        identifier: approval_gate
+        description: Manual approval required for production deployment
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Manual Approval
+                  identifier: manual_approval
+                  type: HarnessApproval
+                  timeout: 1d
+                  spec:
+                    approvalMessage: |-
+                      Please review and approve deployment to production
+                      
+                      Project: PROJECT_NAME
+                      Image Tag: <+pipeline.variables.image_tag>
+                      Pipeline: <+pipeline.name>
+                      Triggered By: <+pipeline.triggeredBy.email>
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                      userGroups:
+                        - PROJECT_IDENTIFIER_prod_approvers
+                    approverInputs: []
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.variables.approval_required> == "true"
+    - stage:
+        name: Deploy to Production
+        identifier: deploy_production
+        description: Deploy to production environment
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: PROJECT_NAME_service
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources:
+                        - identifier: docker_image
+                          type: DockerRegistry
+                          spec:
+                            tag: <+pipeline.variables.image_tag>
+          environment:
+            environmentRef: <+input>
+            deployToAll: false
+            infrastructureDefinitions: <+input>
+          execution:
+            steps:
+              - step:
+                  name: Canary Deployment
+                  identifier: canaryDeployment
+                  type: K8sCanaryDeploy
+                  timeout: 10m
+                  spec:
+                    instanceSelection:
+                      type: Count
+                      spec:
+                        count: 1
+                    skipDryRun: false
+              - step:
+                  type: ShellScript
+                  name: Canary Health Check
+                  identifier: canary_health_check
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Running canary health checks..."
+                          kubectl get pods -n <+pipeline.variables.namespace> -l harness.io/track=canary
+                          # Add canary validation logic
+                    environmentVariables: []
+                  timeout: 5m
+              - step:
+                  type: ShellScript
+                  name: Canary Verification
+                  identifier: canary_verification
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Verifying canary deployment..."
+                          # Add canary verification logic
+                          # Monitor metrics, logs, etc.
+                          sleep 300  # Wait 5 minutes for monitoring
+                    environmentVariables: []
+                  timeout: 10m
+              - step:
+                  name: Rolling Deployment
+                  identifier: rollingDeployment
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+              - step:
+                  type: ShellScript
+                  name: Production Health Check
+                  identifier: production_health_check
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Running production health checks..."
+                          kubectl get pods -n <+pipeline.variables.namespace>
+                          kubectl rollout status deployment/PROJECT_NAME -n <+pipeline.variables.namespace>
+                          # Add production validation commands
+                    environmentVariables: []
+                  timeout: 5m
+            rollbackSteps:
+              - step:
+                  name: Canary Delete
+                  identifier: canaryDelete
+                  type: K8sCanaryDelete
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+              - step:
+                  name: Rollback Deployment
+                  identifier: rollbackDeployment
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec:
+                    pruningEnabled: false
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+    - stage:
+        name: Post-Deployment
+        identifier: post_deployment
+        description: Post-deployment activities
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: ShellScript
+                  name: Update Documentation
+                  identifier: update_documentation
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          echo "Deployment completed successfully"
+                          echo "Project: PROJECT_NAME"
+                          echo "Image Tag: <+pipeline.variables.image_tag>"
+                          echo "Timestamp: $(date)"
+                          # Add documentation update commands
+                    environmentVariables: []
+                  timeout: 5m
+  notificationRules:
+    - name: Production Pipeline Notifications
+      identifier: prod_pipeline_notifications
+      pipelineEvents:
+        - type: PipelineFailed
+        - type: PipelineSuccess
+        - type: StageFailed
+          forStages:
+            - deploy_production
+      notificationMethod:
+        type: Email
+        spec:
+          userGroups:
+            - PROJECT_IDENTIFIER_developers
+            - PROJECT_IDENTIFIER_prod_approvers
+          recipients:
+            - <+pipeline.triggeredBy.email>
+    - name: Production Deployment Alert
+      identifier: prod_deployment_alert
+      pipelineEvents:
+        - type: StageSuccess
+          forStages:
+            - deploy_production
+      notificationMethod:
+        type: Slack
+        spec:
+          userGroups: []
+          webhookUrl: SLACK_WEBHOOK_URL

@@ -108,17 +108,47 @@ pipeline {
                     
                     if (hasPython == 'not_found') {
                         echo "⚠️ Python not found, attempting to install it..."
-                        try {
-                            // Try with apt-get (Debian/Ubuntu)
-                            sh "apt-get update && apt-get install -y python3 python3-pip python3-yaml"
-                        } catch (Exception e) {
-                            echo "⚠️ apt-get install failed, trying with apk (Alpine)..."
+                        
+                        // First, check if we have sudo access
+                        def hasSudo = sh(script: "which sudo || echo 'no_sudo'", returnStdout: true).trim()
+                        
+                        if (hasSudo != 'no_sudo') {
+                            // Try with sudo commands
                             try {
-                                // Try with apk (Alpine)
-                                sh "apk add --no-cache python3 py3-pip py3-yaml"
-                            } catch (Exception e2) {
-                                echo "⚠️ Could not install Python. Please install it manually on the Jenkins node."
-                                error "Python installation failed. See logs for details."
+                                sh "sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-yaml"
+                                echo "✅ Python installed successfully with apt-get"
+                            } catch (Exception e1) {
+                                echo "⚠️ apt-get install failed, trying with yum..."
+                                try {
+                                    sh "sudo yum install -y python3 python3-pip python3-pyyaml"
+                                    echo "✅ Python installed successfully with yum"
+                                } catch (Exception e2) {
+                                    echo "⚠️ yum install failed, trying with apk..."
+                                    try {
+                                        sh "sudo apk add --no-cache python3 py3-pip py3-yaml"
+                                        echo "✅ Python installed successfully with apk"
+                                    } catch (Exception e3) {
+                                        error "❌ All package managers failed. Please install Python manually."
+                                    }
+                                }
+                            }
+                        } else {
+                            // Try without sudo
+                            try {
+                                sh "apt-get update && apt-get install -y python3 python3-pip python3-yaml"
+                                echo "✅ Python installed successfully with apt-get (no sudo)"
+                            } catch (Exception e1) {
+                                try {
+                                    sh "yum install -y python3 python3-pip python3-pyyaml"
+                                    echo "✅ Python installed successfully with yum (no sudo)"
+                                } catch (Exception e2) {
+                                    try {
+                                        sh "apk add --no-cache python3 py3-pip py3-yaml"
+                                        echo "✅ Python installed successfully with apk (no sudo)"
+                                    } catch (Exception e3) {
+                                        error "❌ Could not install Python. Please install it manually on the Jenkins node."
+                                    }
+                                }
                             }
                         }
                     }
@@ -126,8 +156,8 @@ pipeline {
                     // Check Python version
                     sh "${PYTHON_VERSION} --version"
                     
-                    // Install requirements
-                    sh "${PIP_VERSION} install pyyaml requests"
+                    // Install requirements (with pip user install to avoid permission issues)
+                    sh "${PIP_VERSION} install --user pyyaml requests"
                     echo "✅ Python environment ready"
                 }
             }
@@ -177,11 +207,15 @@ features:
   create_rbac: ${params.CREATE_RBAC}
   create_pipelines: true
 
-templates:
+pipelines:
   nonprod:
+    name: "NonProd Deployment Pipeline"
+    identifier: "nonprod_pipeline"
     template_ref: "${params.NONPROD_TEMPLATE_REF}"
     version: "${params.NONPROD_TEMPLATE_VERSION}"
   prod:
+    name: "Production Deployment Pipeline"
+    identifier: "prod_pipeline"
     template_ref: "${params.PROD_TEMPLATE_REF}"
     version: "${params.PROD_TEMPLATE_VERSION}"
 """

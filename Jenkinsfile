@@ -85,6 +85,7 @@ pipeline {
     
     environment {
         PYTHON_VERSION = 'python3'
+        PIP_VERSION = 'pip3'
     }
     
     stages {
@@ -101,10 +102,33 @@ pipeline {
             steps {
                 script {
                     echo "📦 Setting up Python environment..."
-                    sh """
-                        ${PYTHON_VERSION} --version
-                        pip3 install --user -r requirements.txt
-                    """
+                    
+                    // Check if python3 exists, if not try to install it
+                    def hasPython = sh(script: "which ${PYTHON_VERSION} || echo 'not_found'", returnStdout: true).trim()
+                    
+                    if (hasPython == 'not_found') {
+                        echo "⚠️ Python not found, attempting to install it..."
+                        try {
+                            // Try with apt-get (Debian/Ubuntu)
+                            sh "apt-get update && apt-get install -y python3 python3-pip python3-yaml"
+                        } catch (Exception e) {
+                            echo "⚠️ apt-get install failed, trying with apk (Alpine)..."
+                            try {
+                                // Try with apk (Alpine)
+                                sh "apk add --no-cache python3 py3-pip py3-yaml"
+                            } catch (Exception e2) {
+                                echo "⚠️ Could not install Python. Please install it manually on the Jenkins node."
+                                error "Python installation failed. See logs for details."
+                            }
+                        }
+                    }
+                    
+                    // Check Python version
+                    sh "${PYTHON_VERSION} --version"
+                    
+                    // Install requirements
+                    sh "${PIP_VERSION} install pyyaml requests"
+                    echo "✅ Python environment ready"
                 }
             }
         }
@@ -239,9 +263,16 @@ templates:
             echo "Check the logs above for error details."
         }
         always {
+            echo "Cleaning up sensitive files..."
+            // Use a try-catch to ensure this cleanup always happens
+            // even if there are permission issues
             script {
-                // Clean up sensitive config file
-                sh 'rm -f jenkins-generated-config.yaml || true'
+                try {
+                    sh 'rm -f jenkins-generated-config.yaml'
+                    echo "Cleanup complete"
+                } catch (Exception e) {
+                    echo "Note: Could not clean up config file, but this is not critical."
+                }
             }
         }
     }

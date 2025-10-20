@@ -2,8 +2,7 @@
 
 /**
  * Harness Project Automation - Jenkins Pipeline
- * 
- * Complete implementation with project, user groups, environments, services, and pipelines
+ * Uses Python directly in the Jenkins container
  */
 
 pipeline {
@@ -12,7 +11,7 @@ pipeline {
     parameters {
         choice(
             name: 'ACTION',
-            choices: ['create-project', 'dry-run'],
+            choices: ['create-project', 'create-templates', 'dry-run'],
             description: 'What action to perform'
         )
         string(
@@ -83,7 +82,7 @@ pipeline {
     }
     
     environment {
-        HARNESS_BASE_URL = "https://app.harness.io"
+        PYTHON_CMD = "python3"
     }
     
     stages {
@@ -92,6 +91,17 @@ pipeline {
                 script {
                     echo "🔄 Checking out code..."
                     checkout scm
+                }
+            }
+        }
+        
+        stage('Verify Python') {
+            steps {
+                script {
+                    echo "🔍 Verifying Python installation..."
+                    sh "${PYTHON_CMD} --version"
+                    sh "pip3 --version"
+                    sh "pip3 list | grep -E 'yaml|requests'"
                 }
             }
         }
@@ -118,7 +128,7 @@ pipeline {
   account_id: "${params.HARNESS_ACCOUNT_ID}"
   api_key: "${params.HARNESS_API_KEY}"
   org_id: "${params.HARNESS_ORG_ID}"
-  base_url: "${HARNESS_BASE_URL}"
+  base_url: "https://app.harness.io"
 
 project:
   repo_name: "${params.PROJECT_NAME}"
@@ -170,109 +180,35 @@ pipelines:
             }
         }
         
-        stage('Execute Harness Setup') {
+        stage('Execute Automation') {
             steps {
                 script {
-                    echo "🚀 Creating Harness resources..."
+                    echo "🚀 Executing Harness automation..."
                     
-                    if (params.ACTION == 'dry-run') {
-                        echo "🧪 DRY RUN MODE - No changes will be made to Harness"
-                        echo "Would create project: ${params.PROJECT_NAME}"
-                        echo "Would create user groups with RBAC"
-                        echo "Would create environments: prod, nonprod"
-                        echo "Would create services"
-                        echo "Would set up pipeline templates"
-                        return
-                    }
+                    // Install dependencies if needed
+                    sh "${PYTHON_CMD} -m pip install --user pyyaml requests"
                     
-                    // Project identifier (slugified)
-                    def projectId = params.PROJECT_NAME.toLowerCase().replaceAll(/[^a-z0-9]/, '_')
-                    def projectResult = "Initial value"
-                    
-                    // Step 1: Create Project
-                    try {
-                        echo "📂 Creating project: ${params.PROJECT_NAME}"
-                        def projectPayload = """
-                        {
-                            "project": {
-                                "orgIdentifier": "${params.HARNESS_ORG_ID}",
-                                "identifier": "${projectId}",
-                                "name": "${params.PROJECT_NAME}",
-                                "description": "${params.PROJECT_DESCRIPTION}",
-                                "color": "#0063F7"
-                            }
-                        }
+                    if (params.ACTION == 'create-templates') {
+                        echo "📋 Creating org-level templates..."
+                        sh """
+                            ${PYTHON_CMD} scripts/create_with_templates.py \\
+                                --config-file jenkins-generated-config.yaml \\
+                                --create-templates
                         """
-                        
-                        def projectCreateCmd = """
-                        curl -s -X POST '${HARNESS_BASE_URL}/gateway/ng/api/projects' \\
-                            -H 'content-type: application/json' \\
-                            -H 'x-api-key: ${params.HARNESS_API_KEY}' \\
-                            -d '${projectPayload.replaceAll("'", "'\\\\''")}'
+                    } else if (params.ACTION == 'dry-run') {
+                        echo "🧪 Dry run mode - no changes will be made"
+                        sh """
+                            ${PYTHON_CMD} scripts/create_complete_project.py \\
+                                --config-file jenkins-generated-config.yaml \\
+                                --dry-run
                         """
-                        
-                        projectResult = sh(script: projectCreateCmd, returnStdout: true).trim()
-                        echo "Project creation result: ${projectResult}"
-                        echo "Project created with ID: ${projectId}"
-                    } catch (Exception e) {
-                        echo "Warning: Error creating project, it might already exist: ${e.getMessage()}"
+                    } else {
+                        echo "📦 Creating complete project..."
+                        sh """
+                            ${PYTHON_CMD} scripts/create_complete_project.py \\
+                                --config-file jenkins-generated-config.yaml
+                        """
                     }
-                    
-                    // Step 2: Create Environments (Prod & NonProd)
-                    try {
-                        echo "🌎 Creating environments..."
-                        createEnvironment(params.HARNESS_API_KEY, params.HARNESS_ORG_ID, projectId, "nonprod", "NonProd")
-                        createEnvironment(params.HARNESS_API_KEY, params.HARNESS_ORG_ID, projectId, "prod", "Production")
-                    } catch (Exception e) {
-                        echo "Warning: Error creating environments: ${e.getMessage()}"
-                    }
-                    
-                    // Step 3: Create Service
-                    try {
-                        echo "⚙️ Creating service..."
-                        createService(params.HARNESS_API_KEY, params.HARNESS_ORG_ID, projectId, "main_service", "${params.PROJECT_NAME} Main Service")
-                    } catch (Exception e) {
-                        echo "Warning: Error creating service: ${e.getMessage()}"
-                    }
-                    
-                    // Step 4: Create User Groups if CREATE_RBAC is true
-                    if (params.CREATE_RBAC) {
-                        echo "👥 Creating user groups..."
-                        try {
-                            createUserGroups(params.HARNESS_API_KEY, params.HARNESS_ORG_ID, projectId, 
-                                             params.DEVELOPER_EMAILS, params.APPROVER_EMAILS, params.OPERATOR_EMAILS)
-                        } catch (Exception e) {
-                            echo "Warning: Error creating user groups: ${e.getMessage()}"
-                        }
-                    }
-                    
-                    // Step 5: Create Pipelines
-                    try {
-                        echo "🔄 Creating pipelines..."
-                        createPipeline(params.HARNESS_API_KEY, params.HARNESS_ORG_ID, projectId, 
-                                      "nonprod_pipeline", "NonProd Deployment Pipeline",
-                                      params.NONPROD_TEMPLATE_REF, params.NONPROD_TEMPLATE_VERSION)
-                        
-                        createPipeline(params.HARNESS_API_KEY, params.HARNESS_ORG_ID, projectId,
-                                      "prod_pipeline", "Production Deployment Pipeline",
-                                      params.PROD_TEMPLATE_REF, params.PROD_TEMPLATE_VERSION)
-                    } catch (Exception e) {
-                        echo "Warning: Error creating pipelines: ${e.getMessage()}"
-                    }
-                    
-                    // Save results
-                    def results = [
-                        "project": [
-                            "identifier": projectId,
-                            "name": params.PROJECT_NAME
-                        ],
-                        "environments": ["nonprod", "prod"],
-                        "services": ["main_service"],
-                        "pipelines": ["nonprod_pipeline", "prod_pipeline"]
-                    ]
-                    
-                    writeFile file: "complete_setup_results_${System.currentTimeMillis()}.json", 
-                              text: groovy.json.JsonOutput.toJson(results)
                 }
             }
         }
@@ -282,6 +218,7 @@ pipelines:
                 script {
                     echo "📁 Archiving results..."
                     archiveArtifacts artifacts: 'complete_setup_results_*.json', allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'template_setup_results_*.json', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'jenkins-generated-config.yaml', allowEmptyArchive: true
                 }
             }
@@ -294,7 +231,7 @@ pipelines:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "Project: ${params.PROJECT_NAME}"
             echo "Action: ${params.ACTION}"
-            echo "Check Harness UI: ${HARNESS_BASE_URL}"
+            echo "Check Harness UI: https://app.harness.io"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         }
         failure {
@@ -313,273 +250,4 @@ pipelines:
             }
         }
     }
-}
-
-// Helper function to create environments
-def createEnvironment(apiKey, orgId, projectId, envId, envName) {
-    def envPayload = """
-    {
-        "environment": {
-            "orgIdentifier": "${orgId}",
-            "projectIdentifier": "${projectId}",
-            "identifier": "${envId}",
-            "name": "${envName}",
-            "description": "${envName} environment",
-            "type": "PreProduction",
-            "tags": {}
-        }
-    }
-    """
-    
-    if (envId == "prod") {
-        // Override type for prod environment
-        envPayload = envPayload.replace('"type": "PreProduction"', '"type": "Production"')
-    }
-    
-    def envCmd = """
-    curl -s -X POST '${HARNESS_BASE_URL}/gateway/ng/api/environments' \\
-        -H 'content-type: application/json' \\
-        -H 'x-api-key: ${apiKey}' \\
-        -d '${envPayload.replaceAll("'", "'\\\\''")}'
-    """
-    
-    def envResult = sh(script: envCmd, returnStdout: true).trim()
-    echo "Environment creation result for ${envId}: ${envResult}"
-}
-
-// Helper function to create service
-def createService(apiKey, orgId, projectId, serviceId, serviceName) {
-    def servicePayload = """
-    {
-        "service": {
-            "name": "${serviceName}",
-            "identifier": "${serviceId}",
-            "orgIdentifier": "${orgId}",
-            "projectIdentifier": "${projectId}",
-            "serviceDefinition": {
-                "type": "Kubernetes",
-                "spec": {
-                    "artifacts": {
-                        "primary": {
-                            "type": "DockerRegistry",
-                            "spec": {
-                                "connectorRef": "<+input>",
-                                "imagePath": "<+input>",
-                                "tag": "<+input>"
-                            }
-                        }
-                    },
-                    "manifests": {
-                        "manifest": {
-                            "type": "K8sManifest",
-                            "spec": {
-                                "store": {
-                                    "type": "Git",
-                                    "spec": {
-                                        "connectorRef": "<+input>",
-                                        "gitFetchType": "Branch",
-                                        "branch": "main",
-                                        "paths": ["<+input>"]
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    """
-    
-    def serviceCmd = """
-    curl -s -X POST '${HARNESS_BASE_URL}/gateway/ng/api/services' \\
-        -H 'content-type: application/json' \\
-        -H 'x-api-key: ${apiKey}' \\
-        -d '${servicePayload.replaceAll("'", "'\\\\''")}'
-    """
-    
-    def serviceResult = sh(script: serviceCmd, returnStdout: true).trim()
-    echo "Service creation result: ${serviceResult}"
-}
-
-// Helper function to create pipelines from templates
-def createPipeline(apiKey, orgId, projectId, pipelineId, pipelineName, templateRef, templateVersion) {
-    def pipelinePayload = """
-    {
-        "pipeline": {
-            "name": "${pipelineName}",
-            "identifier": "${pipelineId}",
-            "orgIdentifier": "${orgId}",
-            "projectIdentifier": "${projectId}",
-            "templateRef": "${templateRef}",
-            "templateVersion": "${templateVersion}",
-            "tags": {},
-            "properties": {}
-        }
-    }
-    """
-    
-    def pipelineCmd = """
-    curl -s -X POST '${HARNESS_BASE_URL}/gateway/pipeline/api/pipelines/v2' \\
-        -H 'content-type: application/json' \\
-        -H 'x-api-key: ${apiKey}' \\
-        -d '${pipelinePayload.replaceAll("'", "'\\\\''")}'
-    """
-    
-    def pipelineResult = sh(script: pipelineCmd, returnStdout: true).trim()
-    echo "Pipeline creation result for ${pipelineId}: ${pipelineResult}"
-}
-
-// Helper function to create user groups with RBAC
-def createUserGroups(apiKey, orgId, projectId, developerEmails, approverEmails, operatorEmails) {
-    // Create developer group
-    def devGroupPayload = """
-    {
-        "userGroup": {
-            "name": "${projectId}_developers",
-            "orgIdentifier": "${orgId}",
-            "description": "Developers for ${projectId}",
-            "userEmails": ${parseEmailsToJson(developerEmails)},
-            "isSSOLinked": false
-        }
-    }
-    """
-    
-    def devGroupCmd = """
-    curl -s -X POST '${HARNESS_BASE_URL}/gateway/ng/api/user-groups' \\
-        -H 'content-type: application/json' \\
-        -H 'x-api-key: ${apiKey}' \\
-        -d '${devGroupPayload.replaceAll("'", "'\\\\''")}'
-    """
-    
-    try {
-        def devResult = sh(script: devGroupCmd, returnStdout: true).trim()
-        echo "Developer group created: ${devResult}"
-        
-        // Add permissions for developers
-        addRbacPermissions(apiKey, orgId, projectId, "${projectId}_developers", "developer")
-    } catch (Exception e) {
-        echo "Warning: Failed to create developer group: ${e.getMessage()}"
-    }
-    
-    // Create approver group
-    def approverGroupPayload = """
-    {
-        "userGroup": {
-            "name": "${projectId}_approvers",
-            "orgIdentifier": "${orgId}",
-            "description": "Approvers for ${projectId}",
-            "userEmails": ${parseEmailsToJson(approverEmails)},
-            "isSSOLinked": false
-        }
-    }
-    """
-    
-    def approverGroupCmd = """
-    curl -s -X POST '${HARNESS_BASE_URL}/gateway/ng/api/user-groups' \\
-        -H 'content-type: application/json' \\
-        -H 'x-api-key: ${apiKey}' \\
-        -d '${approverGroupPayload.replaceAll("'", "'\\\\''")}'
-    """
-    
-    try {
-        def approverResult = sh(script: approverGroupCmd, returnStdout: true).trim()
-        echo "Approver group created: ${approverResult}"
-        
-        // Add permissions for approvers
-        addRbacPermissions(apiKey, orgId, projectId, "${projectId}_approvers", "approver")
-    } catch (Exception e) {
-        echo "Warning: Failed to create approver group: ${e.getMessage()}"
-    }
-    
-    // Create operator group
-    def operatorGroupPayload = """
-    {
-        "userGroup": {
-            "name": "${projectId}_operators",
-            "orgIdentifier": "${orgId}",
-            "description": "Operators for ${projectId}",
-            "userEmails": ${parseEmailsToJson(operatorEmails)},
-            "isSSOLinked": false
-        }
-    }
-    """
-    
-    def operatorGroupCmd = """
-    curl -s -X POST '${HARNESS_BASE_URL}/gateway/ng/api/user-groups' \\
-        -H 'content-type: application/json' \\
-        -H 'x-api-key: ${apiKey}' \\
-        -d '${operatorGroupPayload.replaceAll("'", "'\\\\''")}'
-    """
-    
-    try {
-        def operatorResult = sh(script: operatorGroupCmd, returnStdout: true).trim()
-        echo "Operator group created: ${operatorResult}"
-        
-        // Add permissions for operators
-        addRbacPermissions(apiKey, orgId, projectId, "${projectId}_operators", "operator")
-    } catch (Exception e) {
-        echo "Warning: Failed to create operator group: ${e.getMessage()}"
-    }
-    
-    echo "User groups created and permissions set"
-}
-
-// Helper function to add RBAC permissions
-def addRbacPermissions(apiKey, orgId, projectId, groupName, role) {
-    echo "Adding RBAC permissions for ${groupName} with role ${role}..."
-    
-    def permissions = []
-    if (role == "developer") {
-        permissions = ["core_pipeline_view", "core_pipeline_edit", "core_environment_view", "core_service_view"]
-    } else if (role == "approver") {
-        permissions = ["core_pipeline_view", "core_pipeline_edit", "core_pipeline_execute", "core_pipeline_approve", "core_environment_view", "core_service_view"]
-    } else if (role == "operator") {
-        permissions = ["core_pipeline_view", "core_pipeline_execute", "core_environment_view", "core_service_view"]
-    }
-    
-    def permissionsList = permissions.collect { "\"${it}\"" }.join(",")
-    
-    def rbacPayload = """
-    {
-        "resourceGroupRequest": {
-            "identifier": "${groupName}_permissions",
-            "name": "${groupName} permissions",
-            "orgIdentifier": "${orgId}",
-            "projectIdentifier": "${projectId}",
-            "resourceSelectors": [
-                {
-                    "type": "ALL",
-                    "filter": "*"
-                }
-            ],
-            "roles": [
-                {
-                    "identifier": "custom",
-                    "permissions": [${permissionsList}]
-                }
-            ]
-        }
-    }
-    """
-    
-    def rbacCmd = """
-    curl -s -X POST '${HARNESS_BASE_URL}/gateway/authz/api/resource-groups' \\
-        -H 'content-type: application/json' \\
-        -H 'x-api-key: ${apiKey}' \\
-        -d '${rbacPayload.replaceAll("'", "'\\\\''")}'
-    """
-    
-    try {
-        def rbacResult = sh(script: rbacCmd, returnStdout: true).trim()
-        echo "RBAC permissions added for ${groupName}: ${rbacResult}"
-    } catch (Exception e) {
-        echo "Warning: Failed to add RBAC permissions for ${groupName}: ${e.getMessage()}"
-    }
-}
-
-// Helper function to parse emails to JSON array
-def parseEmailsToJson(emailsText) {
-    def emails = emailsText.split(',').collect { it.trim() }
-    return "[" + emails.collect { "\"${it}\"" }.join(",") + "]"
 }

@@ -94,21 +94,15 @@ pipeline {
     
     post {
         success {
-            node {  // Important: wrap post actions in a node block
-                echo "✅ SUCCESS! Harness project automation completed successfully!"
-            }
+            echo "✅ SUCCESS! Harness project automation completed successfully!"
         }
         failure {
-            node {  // Important: wrap post actions in a node block
-                echo "❌ FAILED! Harness project automation failed!"
-                echo "Check the logs above for error details."
-            }
+            echo "❌ FAILED! Harness project automation failed!"
+            echo "Check the logs above for error details."
         }
         always {
-            node {  // Important: wrap post actions in a node block
-                // Clean up the config file that contains sensitive information
-                sh "rm -f my-config.yaml || true"
-            }
+            // Clean up the config file that contains sensitive information
+            sh "rm -f my-config.yaml || true"
         }
     }
 }

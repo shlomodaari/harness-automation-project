@@ -28,16 +28,19 @@ pipeline {
                     // Checkout the code
                     checkout scm
                     
+                    // Display credential IDs for verification
+                    echo "Using credentials: harness-account-id and harness-api-credentials"
+                    
+                    // NOTE: For the credentials to work, they should be set up as:
+                    // 1. harness-account-id: username = actual account ID, password doesn't matter
+                    // 2. harness-api-credentials: password = actual API key, username doesn't matter
+                    
                     // Use the credentials
                     withCredentials([
-                        usernamePassword(credentialsId: 'harness-account-id', 
-                                       usernameVariable: 'ACCOUNT_ID', 
-                                       passwordVariable: 'ACCOUNT_ID_UNUSED'),
-                        usernamePassword(credentialsId: 'harness-api-credentials', 
-                                       usernameVariable: 'API_KEY_UNUSED', 
-                                       passwordVariable: 'API_KEY')
+                        string(credentialsId: 'harness-account-id', variable: 'ACCOUNT_ID'),
+                        string(credentialsId: 'harness-api-credentials', variable: 'API_KEY')
                     ]) {
-                        // Generate a new config from scratch
+                        // Generate a new config file
                         writeFile file: 'jenkins-config.yaml', text: """harness:
   account_id: "${ACCOUNT_ID}"
   api_key: "${API_KEY}"

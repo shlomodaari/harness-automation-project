@@ -561,12 +561,6 @@ Contributions welcome! Please:
 
 ---
 
-## 📝 License
-
-This project is licensed under the MIT License.
-
----
-
 ## 🎉 Success!
 
 You now have a complete, production-ready Harness automation system!

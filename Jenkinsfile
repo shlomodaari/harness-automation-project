@@ -2,7 +2,7 @@
 
 /**
  * Harness Project Automation - Jenkins Pipeline
- * Uses Python directly in the Jenkins container
+ * Uses Python directly with system packages
  */
 
 pipeline {
@@ -101,7 +101,8 @@ pipeline {
                     echo "🔍 Verifying Python installation..."
                     sh "${PYTHON_CMD} --version"
                     sh "pip3 --version"
-                    sh "pip3 list | grep -E 'yaml|requests'"
+                    // Check if required packages are installed
+                    sh "python3 -c 'import yaml, requests; print(\"✅ Required packages are available\")'"
                 }
             }
         }
@@ -185,8 +186,8 @@ pipelines:
                 script {
                     echo "🚀 Executing Harness automation..."
                     
-                    // Install dependencies if needed
-                    sh "${PYTHON_CMD} -m pip install --user pyyaml requests"
+                    // NO LONGER NEEDED: Install dependencies - packages are already installed system-wide
+                    // sh "${PYTHON_CMD} -m pip install --user pyyaml requests"
                     
                     if (params.ACTION == 'create-templates') {
                         echo "📋 Creating org-level templates..."

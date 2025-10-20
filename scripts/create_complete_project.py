@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 class HarnessCompleteAutomation:
-    def __init__(self, account_id: str, api_key: str, org_id: str):
+    def __init__(self, account_id: str, api_key: str, org_id: str, base_url: str = "https://app.harness.io"):
         self.account_id = account_id
         self.api_key = api_key
         self.org_id = org_id
-        self.base_url = "https://app.harness.io"
+        self.base_url = base_url
     
     def _make_request(self, method: str, endpoint: str, payload: Dict = None, content_type: str = "application/json") -> Dict:
         """Make API request to Harness"""
@@ -290,6 +290,7 @@ def main():
     parser = argparse.ArgumentParser(description='Complete Harness Project Creation')
     parser.add_argument('--config-file', required=True, help='Path to config YAML file')
     parser.add_argument('--dry-run', action='store_true', help='Dry run mode')
+    parser.add_argument('--create-templates', action='store_true', help='Create org-level templates')
     
     args = parser.parse_args()
     
@@ -299,6 +300,7 @@ def main():
     account_id = config['harness']['account_id']
     api_key = config['harness']['api_key']
     org_id = config['harness']['org_id']
+    base_url = config['harness'].get('base_url', "https://app.harness.io")
     project_name = config['project']['repo_name']
     project_id = project_name.lower().replace('-', '_')
     
@@ -306,14 +308,22 @@ def main():
         logger.info("DRY RUN MODE")
         logger.info(f"Would create project: {project_name}")
         logger.info(f"Using templates:")
-        logger.info(f"  - NonProd: {config.get('templates', {}).get('nonprod', {}).get('template_ref', 'N/A')}")
-        logger.info(f"  - Prod: {config.get('templates', {}).get('prod', {}).get('template_ref', 'N/A')}")
+        
+        # Check both templates and pipelines sections for compatibility
+        # This makes it work with both the old script format and your Jenkins config
+        if 'templates' in config:
+            logger.info(f"  - NonProd: {config.get('templates', {}).get('nonprod', {}).get('template_ref', 'N/A')}")
+            logger.info(f"  - Prod: {config.get('templates', {}).get('prod', {}).get('template_ref', 'N/A')}")
+        elif 'pipelines' in config:
+            logger.info(f"  - NonProd: {config.get('pipelines', {}).get('nonprod', {}).get('template_ref', 'N/A')}")
+            logger.info(f"  - Prod: {config.get('pipelines', {}).get('prod', {}).get('template_ref', 'N/A')}")
         return
     
     automation = HarnessCompleteAutomation(
         account_id=account_id,
         api_key=api_key,
-        org_id=org_id
+        org_id=org_id,
+        base_url=base_url
     )
     
     try:
@@ -388,16 +398,25 @@ def main():
         logger.info("STEP 5: Creating Pipelines from Templates")
         logger.info("=" * 80)
         
-        # Get template configuration
-        nonprod_template_config = config.get('templates', {}).get('nonprod', {})
-        prod_template_config = config.get('templates', {}).get('prod', {})
-        
-        nonprod_template_ref = nonprod_template_config.get('template_ref', 'nonprod_deployment_pipeline')
-        nonprod_version = nonprod_template_config.get('version', 'v1')
-        
-        prod_template_ref = prod_template_config.get('template_ref', 'prod_deployment_pipeline')
-        prod_version = prod_template_config.get('version', 'v1')
-        
+        # FIXED: Check both templates and pipelines sections for backward compatibility
+        # This makes it work with both the old script format and the Jenkins config
+        if 'pipelines' in config:
+            nonprod_template_ref = config.get('pipelines', {}).get('nonprod', {}).get('template_ref', 'nonprod_deployment_pipeline')
+            nonprod_version = config.get('pipelines', {}).get('nonprod', {}).get('version', 'v1')
+            
+            prod_template_ref = config.get('pipelines', {}).get('prod', {}).get('template_ref', 'prod_deployment_pipeline')
+            prod_version = config.get('pipelines', {}).get('prod', {}).get('version', 'v1')
+        else:
+            # Fallback to old format
+            nonprod_template_config = config.get('templates', {}).get('nonprod', {})
+            prod_template_config = config.get('templates', {}).get('prod', {})
+            
+            nonprod_template_ref = nonprod_template_config.get('template_ref', 'nonprod_deployment_pipeline')
+            nonprod_version = nonprod_template_config.get('version', 'v1')
+            
+            prod_template_ref = prod_template_config.get('template_ref', 'prod_deployment_pipeline')
+            prod_version = prod_template_config.get('version', 'v1')
+            
         logger.info(f"Using NonProd Template: {nonprod_template_ref} (version {nonprod_version})")
         logger.info(f"Using Prod Template: {prod_template_ref} (version {prod_version})")
         

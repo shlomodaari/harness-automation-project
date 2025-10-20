@@ -126,7 +126,7 @@ pipeline {
         )
         string(
             name: 'NONPROD_TEMPLATE_VERSION',
-            defaultValue: 'v1760729233',
+            defaultValue: 'v1760729233',  // FIXED: Using actual version from screenshot
             description: 'Template version for non-production pipeline'
         )
         
@@ -148,7 +148,7 @@ pipeline {
         )
         string(
             name: 'PROD_TEMPLATE_VERSION',
-            defaultValue: 'v1760729233',
+            defaultValue: 'v1760729233',  // FIXED: Using actual version from screenshot
             description: 'Template version for production pipeline'
         )
     }
@@ -244,7 +244,7 @@ pipelines:
                         }
                         
                         try {
-                            // Run the script WITHOUT the verbose flag
+                            // Run the script
                             sh "python3 scripts/create_complete_project.py --config-file jenkins-config.yaml ${actionFlag}"
                             echo "✅ SUCCESS! Project automation completed."
                         } catch (Exception e) {

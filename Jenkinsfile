@@ -151,13 +151,6 @@ pipeline {
             defaultValue: 'v1760729233',
             description: 'Template version for production pipeline'
         )
-        
-        // Execution Options
-        booleanParam(
-            name: 'VERBOSE_OUTPUT',
-            defaultValue: true,
-            description: 'Enable verbose output for debugging'
-        )
     }
     
     stages {
@@ -237,9 +230,8 @@ pipelines:
                         
                         echo "Configuration generated with secure credentials"
                         
-                        // Determine action flag and verbose flag
+                        // Determine action flag
                         def actionFlag = ""
-                        def verboseFlag = params.VERBOSE_OUTPUT ? "--verbose" : ""
                         
                         if (params.ACTION == 'dry-run') {
                             actionFlag = "--dry-run"
@@ -252,8 +244,8 @@ pipelines:
                         }
                         
                         try {
-                            // Run the script
-                            sh "python3 scripts/create_complete_project.py --config-file jenkins-config.yaml ${actionFlag} ${verboseFlag}"
+                            // Run the script WITHOUT the verbose flag
+                            sh "python3 scripts/create_complete_project.py --config-file jenkins-config.yaml ${actionFlag}"
                             echo "✅ SUCCESS! Project automation completed."
                         } catch (Exception e) {
                             echo "❌ ERROR: ${e.getMessage()}"

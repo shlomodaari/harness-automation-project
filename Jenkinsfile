@@ -83,11 +83,6 @@ pipeline {
         )
     }
     
-    environment {
-        PYTHON_VERSION = 'python3'
-        PIP_VERSION = 'pip3'
-    }
-    
     stages {
         stage('Checkout') {
             steps {
@@ -98,67 +93,26 @@ pipeline {
             }
         }
         
-        stage('Setup Environment') {
+        stage('Check Docker') {
             steps {
                 script {
-                    echo "📦 Setting up Python environment..."
+                    echo "🔍 Checking Docker availability..."
                     
-                    // Check if python3 exists, if not try to install it
-                    def hasPython = sh(script: "which ${PYTHON_VERSION} || echo 'not_found'", returnStdout: true).trim()
-                    
-                    if (hasPython == 'not_found') {
-                        echo "⚠️ Python not found, attempting to install it..."
-                        
-                        // First, check if we have sudo access
-                        def hasSudo = sh(script: "which sudo || echo 'no_sudo'", returnStdout: true).trim()
-                        
-                        if (hasSudo != 'no_sudo') {
-                            // Try with sudo commands
-                            try {
-                                sh "sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-yaml"
-                                echo "✅ Python installed successfully with apt-get"
-                            } catch (Exception e1) {
-                                echo "⚠️ apt-get install failed, trying with yum..."
-                                try {
-                                    sh "sudo yum install -y python3 python3-pip python3-pyyaml"
-                                    echo "✅ Python installed successfully with yum"
-                                } catch (Exception e2) {
-                                    echo "⚠️ yum install failed, trying with apk..."
-                                    try {
-                                        sh "sudo apk add --no-cache python3 py3-pip py3-yaml"
-                                        echo "✅ Python installed successfully with apk"
-                                    } catch (Exception e3) {
-                                        error "❌ All package managers failed. Please install Python manually."
-                                    }
-                                }
-                            }
-                        } else {
-                            // Try without sudo
-                            try {
-                                sh "apt-get update && apt-get install -y python3 python3-pip python3-yaml"
-                                echo "✅ Python installed successfully with apt-get (no sudo)"
-                            } catch (Exception e1) {
-                                try {
-                                    sh "yum install -y python3 python3-pip python3-pyyaml"
-                                    echo "✅ Python installed successfully with yum (no sudo)"
-                                } catch (Exception e2) {
-                                    try {
-                                        sh "apk add --no-cache python3 py3-pip py3-yaml"
-                                        echo "✅ Python installed successfully with apk (no sudo)"
-                                    } catch (Exception e3) {
-                                        error "❌ Could not install Python. Please install it manually on the Jenkins node."
-                                    }
-                                }
-                            }
-                        }
+                    try {
+                        def dockerVersion = sh(script: "docker --version", returnStdout: true).trim()
+                        echo "✅ Docker is available: ${dockerVersion}"
+                    } catch (Exception e) {
+                        error "❌ Docker is not available in this Jenkins environment. Please install Docker or modify the Jenkins container to include Docker."
                     }
-                    
-                    // Check Python version
-                    sh "${PYTHON_VERSION} --version"
-                    
-                    // Install requirements (with pip user install to avoid permission issues)
-                    sh "${PIP_VERSION} install --user pyyaml requests"
-                    echo "✅ Python environment ready"
+                }
+            }
+        }
+        
+        stage('Pull Python Image') {
+            steps {
+                script {
+                    echo "📥 Pulling Python Docker image..."
+                    sh "docker pull python:3.9-slim"
                 }
             }
         }
@@ -168,10 +122,18 @@ pipeline {
                 script {
                     echo "📝 Generating configuration file..."
                     
-                    // Convert comma-separated emails to YAML list
-                    def devEmails = params.DEVELOPER_EMAILS.split(',').collect { "    - ${it.trim()}" }.join('\n')
-                    def approverEmails = params.APPROVER_EMAILS.split(',').collect { "    - ${it.trim()}" }.join('\n')
-                    def operatorEmails = params.OPERATOR_EMAILS.split(',').collect { "    - ${it.trim()}" }.join('\n')
+                    // Convert comma-separated emails to YAML list format
+                    def devEmails = params.DEVELOPER_EMAILS.split(',')
+                        .collect { email -> "    - ${email.trim()}" }
+                        .join('\n')
+                    
+                    def approverEmails = params.APPROVER_EMAILS.split(',')
+                        .collect { email -> "    - ${email.trim()}" }
+                        .join('\n')
+                    
+                    def operatorEmails = params.OPERATOR_EMAILS.split(',')
+                        .collect { email -> "    - ${email.trim()}" }
+                        .join('\n')
                     
                     def configContent = """harness:
   account_id: "${params.HARNESS_ACCOUNT_ID}"
@@ -222,6 +184,9 @@ pipelines:
                     
                     writeFile file: 'jenkins-generated-config.yaml', text: configContent
                     echo "✅ Configuration file generated: jenkins-generated-config.yaml"
+                    
+                    // Display config for verification
+                    sh "cat jenkins-generated-config.yaml"
                 }
             }
         }
@@ -229,11 +194,15 @@ pipelines:
         stage('Validate Configuration') {
             steps {
                 script {
-                    echo "🔍 Validating configuration..."
+                    echo "🔍 Validating YAML configuration..."
+                    
+                    // Use Python Docker container to validate YAML
                     sh """
-                        cat jenkins-generated-config.yaml
-                        ${PYTHON_VERSION} -c "import yaml; yaml.safe_load(open('jenkins-generated-config.yaml'))"
+                    docker run --rm -v \${PWD}/jenkins-generated-config.yaml:/config.yaml \
+                      python:3.9-slim \
+                      python3 -c "import yaml; yaml.safe_load(open('/config.yaml')); print('Config is valid YAML')"
                     """
+                    
                     echo "✅ Configuration is valid YAML"
                 }
             }
@@ -242,31 +211,47 @@ pipelines:
         stage('Execute Automation') {
             steps {
                 script {
-                    echo "🚀 Executing Harness automation..."
+                    echo "🚀 Executing Harness automation via Docker..."
                     
-                    def actionFlag = ''
-                    if (params.ACTION == 'create-templates') {
-                        actionFlag = '--create-templates'
-                        echo "📋 Creating org-level templates..."
-                        sh """
-                            ${PYTHON_VERSION} scripts/create_with_templates.py \\
-                                --config-file jenkins-generated-config.yaml \\
-                                ${actionFlag}
-                        """
-                    } else if (params.ACTION == 'dry-run') {
-                        echo "🧪 Dry run mode - no changes will be made"
-                        sh """
-                            ${PYTHON_VERSION} scripts/create_complete_project.py \\
-                                --config-file jenkins-generated-config.yaml \\
-                                --dry-run
-                        """
-                    } else {
-                        echo "📦 Creating complete project..."
-                        sh """
-                            ${PYTHON_VERSION} scripts/create_complete_project.py \\
-                                --config-file jenkins-generated-config.yaml
-                        """
-                    }
+                    // Create a Python script to install dependencies and run the main script
+                    def scriptContent = """
+import os
+import subprocess
+import sys
+
+# Install required packages
+subprocess.check_call([sys.executable, "-m", "pip", "install", "pyyaml", "requests"])
+
+# Get the action type from environment
+action = os.environ.get('ACTION', 'create-project')
+config_file = '/workspace/jenkins-generated-config.yaml'
+
+if action == 'create-templates':
+    print("Creating org-level templates...")
+    cmd = ["python3", "/workspace/scripts/create_with_templates.py", "--config-file", config_file, "--create-templates"]
+elif action == 'dry-run':
+    print("Dry run mode - no changes will be made")
+    cmd = ["python3", "/workspace/scripts/create_complete_project.py", "--config-file", config_file, "--dry-run"]
+else:
+    print("Creating complete project...")
+    cmd = ["python3", "/workspace/scripts/create_complete_project.py", "--config-file", config_file]
+
+# Execute the command
+result = subprocess.run(cmd, check=False)
+sys.exit(result.returncode)
+"""
+                    
+                    writeFile file: 'run_harness_automation.py', text: scriptContent
+                    
+                    // Run the script in a Docker container with the correct environment
+                    sh """
+                    docker run --rm \
+                      -v \${PWD}:/workspace \
+                      -w /workspace \
+                      -e ACTION=${params.ACTION} \
+                      python:3.9-slim \
+                      python3 run_harness_automation.py
+                    """
                 }
             }
         }
@@ -298,14 +283,12 @@ pipelines:
         }
         always {
             echo "Cleaning up sensitive files..."
-            // Use a try-catch to ensure this cleanup always happens
-            // even if there are permission issues
             script {
                 try {
-                    sh 'rm -f jenkins-generated-config.yaml'
+                    sh 'rm -f jenkins-generated-config.yaml run_harness_automation.py'
                     echo "Cleanup complete"
                 } catch (Exception e) {
-                    echo "Note: Could not clean up config file, but this is not critical."
+                    echo "Note: Could not clean up files, but this is not critical."
                 }
             }
         }

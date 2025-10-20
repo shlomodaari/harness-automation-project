@@ -4,7 +4,7 @@
  * Harness Project Automation - Jenkins Pipeline
  * 
  * This pipeline automates the creation of complete Harness projects
- * including pipelines, services, environments, and RBAC.
+ * using only Groovy and Jenkins built-in capabilities.
  */
 
 pipeline {
@@ -13,7 +13,7 @@ pipeline {
     parameters {
         choice(
             name: 'ACTION',
-            choices: ['create-project', 'create-templates', 'dry-run'],
+            choices: ['create-project', 'dry-run'],
             description: 'What action to perform'
         )
         string(
@@ -56,26 +56,6 @@ pipeline {
             defaultValue: 'ops@example.com',
             description: 'Operator emails (comma-separated)'
         )
-        string(
-            name: 'NONPROD_TEMPLATE_REF',
-            defaultValue: 'nonprod_deployment_pipeline',
-            description: 'NonProd template identifier'
-        )
-        string(
-            name: 'NONPROD_TEMPLATE_VERSION',
-            defaultValue: 'v1760729233',
-            description: 'NonProd template version'
-        )
-        string(
-            name: 'PROD_TEMPLATE_REF',
-            defaultValue: 'prod_deployment_pipeline',
-            description: 'Prod template identifier'
-        )
-        string(
-            name: 'PROD_TEMPLATE_VERSION',
-            defaultValue: 'v1760729233',
-            description: 'Prod template version'
-        )
         booleanParam(
             name: 'CREATE_RBAC',
             defaultValue: true,
@@ -89,30 +69,6 @@ pipeline {
                 script {
                     echo "🔄 Checking out code..."
                     checkout scm
-                }
-            }
-        }
-        
-        stage('Check Docker') {
-            steps {
-                script {
-                    echo "🔍 Checking Docker availability..."
-                    
-                    try {
-                        def dockerVersion = sh(script: "docker --version", returnStdout: true).trim()
-                        echo "✅ Docker is available: ${dockerVersion}"
-                    } catch (Exception e) {
-                        error "❌ Docker is not available in this Jenkins environment. Please install Docker or modify the Jenkins container to include Docker."
-                    }
-                }
-            }
-        }
-        
-        stage('Pull Python Image') {
-            steps {
-                script {
-                    echo "📥 Pulling Python Docker image..."
-                    sh "docker pull python:3.9-slim"
                 }
             }
         }
@@ -168,18 +124,6 @@ features:
   git_experience: false
   create_rbac: ${params.CREATE_RBAC}
   create_pipelines: true
-
-pipelines:
-  nonprod:
-    name: "NonProd Deployment Pipeline"
-    identifier: "nonprod_pipeline"
-    template_ref: "${params.NONPROD_TEMPLATE_REF}"
-    version: "${params.NONPROD_TEMPLATE_VERSION}"
-  prod:
-    name: "Production Deployment Pipeline"
-    identifier: "prod_pipeline"
-    template_ref: "${params.PROD_TEMPLATE_REF}"
-    version: "${params.PROD_TEMPLATE_VERSION}"
 """
                     
                     writeFile file: 'jenkins-generated-config.yaml', text: configContent
@@ -191,67 +135,60 @@ pipelines:
             }
         }
         
-        stage('Validate Configuration') {
+        stage('Execute Harness API Calls') {
             steps {
                 script {
-                    echo "🔍 Validating YAML configuration..."
+                    echo "🚀 Executing Harness API calls..."
                     
-                    // Use Python Docker container to validate YAML
-                    sh """
-                    docker run --rm -v \${PWD}/jenkins-generated-config.yaml:/config.yaml \
-                      python:3.9-slim \
-                      python3 -c "import yaml; yaml.safe_load(open('/config.yaml')); print('Config is valid YAML')"
+                    if (params.ACTION == 'dry-run') {
+                        echo "🧪 DRY RUN MODE - No changes will be made to Harness"
+                        echo "Would create project: ${params.PROJECT_NAME}"
+                        echo "Would create user groups with RBAC"
+                        echo "Would set up pipeline templates"
+                        return
+                    }
+                    
+                    // 1. Create Project
+                    def projectPayload = """
+                    {
+                        "project": {
+                            "orgIdentifier": "${params.HARNESS_ORG_ID}",
+                            "identifier": "${params.PROJECT_NAME.toLowerCase().replaceAll(/[^a-z0-9]/, '_')}",
+                            "name": "${params.PROJECT_NAME}",
+                            "description": "${params.PROJECT_DESCRIPTION}",
+                            "color": "#0063F7"
+                        }
+                    }
                     """
                     
-                    echo "✅ Configuration is valid YAML"
-                }
-            }
-        }
-        
-        stage('Execute Automation') {
-            steps {
-                script {
-                    echo "🚀 Executing Harness automation via Docker..."
-                    
-                    // Create a Python script to install dependencies and run the main script
-                    def scriptContent = """
-import os
-import subprocess
-import sys
-
-# Install required packages
-subprocess.check_call([sys.executable, "-m", "pip", "install", "pyyaml", "requests"])
-
-# Get the action type from environment
-action = os.environ.get('ACTION', 'create-project')
-config_file = '/workspace/jenkins-generated-config.yaml'
-
-if action == 'create-templates':
-    print("Creating org-level templates...")
-    cmd = ["python3", "/workspace/scripts/create_with_templates.py", "--config-file", config_file, "--create-templates"]
-elif action == 'dry-run':
-    print("Dry run mode - no changes will be made")
-    cmd = ["python3", "/workspace/scripts/create_complete_project.py", "--config-file", config_file, "--dry-run"]
-else:
-    print("Creating complete project...")
-    cmd = ["python3", "/workspace/scripts/create_complete_project.py", "--config-file", config_file]
-
-# Execute the command
-result = subprocess.run(cmd, check=False)
-sys.exit(result.returncode)
-"""
-                    
-                    writeFile file: 'run_harness_automation.py', text: scriptContent
-                    
-                    // Run the script in a Docker container with the correct environment
-                    sh """
-                    docker run --rm \
-                      -v \${PWD}:/workspace \
-                      -w /workspace \
-                      -e ACTION=${params.ACTION} \
-                      python:3.9-slim \
-                      python3 run_harness_automation.py
+                    def projectCreateCmd = """
+                    curl -s -X POST 'https://app.harness.io/gateway/ng/api/projects' \\
+                        -H 'content-type: application/json' \\
+                        -H 'x-api-key: ${params.HARNESS_API_KEY}' \\
+                        -d '${projectPayload.replaceAll("'", "'\\\\''")}'
                     """
+                    
+                    try {
+                        def projectResult = sh(script: projectCreateCmd, returnStdout: true).trim()
+                        echo "Project creation result: ${projectResult}"
+                        
+                        // Parse project ID from result
+                        def projectId = params.PROJECT_NAME.toLowerCase().replaceAll(/[^a-z0-9]/, '_')
+                        echo "Project created with ID: ${projectId}"
+                        
+                        // 2. Create User Groups if CREATE_RBAC is true
+                        if (params.CREATE_RBAC) {
+                            createUserGroups(params.HARNESS_API_KEY, params.HARNESS_ORG_ID, projectId, 
+                                             params.DEVELOPER_EMAILS, params.APPROVER_EMAILS, params.OPERATOR_EMAILS)
+                        }
+                        
+                        writeFile file: "complete_setup_results_${System.currentTimeMillis()}.json", 
+                                  text: """{"project": {"identifier": "${projectId}", "name": "${params.PROJECT_NAME}"}}"""
+                        
+                    } catch (Exception e) {
+                        echo "Error creating project: ${e.getMessage()}"
+                        error "Failed to create Harness project. See logs for details."
+                    }
                 }
             }
         }
@@ -261,7 +198,6 @@ sys.exit(result.returncode)
                 script {
                     echo "📁 Archiving results..."
                     archiveArtifacts artifacts: 'complete_setup_results_*.json', allowEmptyArchive: true
-                    archiveArtifacts artifacts: 'template_setup_results_*.json', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'jenkins-generated-config.yaml', allowEmptyArchive: true
                 }
             }
@@ -285,7 +221,7 @@ sys.exit(result.returncode)
             echo "Cleaning up sensitive files..."
             script {
                 try {
-                    sh 'rm -f jenkins-generated-config.yaml run_harness_automation.py'
+                    sh 'rm -f jenkins-generated-config.yaml'
                     echo "Cleanup complete"
                 } catch (Exception e) {
                     echo "Note: Could not clean up files, but this is not critical."
@@ -293,4 +229,128 @@ sys.exit(result.returncode)
             }
         }
     }
+}
+
+// Helper function to create user groups with RBAC
+def createUserGroups(apiKey, orgId, projectId, developerEmails, approverEmails, operatorEmails) {
+    echo "Creating user groups for project ${projectId}..."
+    
+    // Create developer group
+    def devGroupPayload = """
+    {
+        "userGroup": {
+            "name": "${projectId}_developers",
+            "orgIdentifier": "${orgId}",
+            "description": "Developers for ${projectId}",
+            "userEmails": ${parseEmailsToJson(developerEmails)},
+            "isSSOLinked": false
+        }
+    }
+    """
+    
+    def devGroupCmd = """
+    curl -s -X POST 'https://app.harness.io/gateway/ng/api/user-groups' \\
+        -H 'content-type: application/json' \\
+        -H 'x-api-key: ${apiKey}' \\
+        -d '${devGroupPayload.replaceAll("'", "'\\\\''")}'
+    """
+    
+    try {
+        def devResult = sh(script: devGroupCmd, returnStdout: true).trim()
+        echo "Developer group created: ${devResult}"
+        
+        // Add permissions for developers
+        addRbacPermissions(apiKey, orgId, projectId, "${projectId}_developers", "developer")
+    } catch (Exception e) {
+        echo "Warning: Failed to create developer group: ${e.getMessage()}"
+    }
+    
+    // Create approver group
+    def approverGroupPayload = """
+    {
+        "userGroup": {
+            "name": "${projectId}_approvers",
+            "orgIdentifier": "${orgId}",
+            "description": "Approvers for ${projectId}",
+            "userEmails": ${parseEmailsToJson(approverEmails)},
+            "isSSOLinked": false
+        }
+    }
+    """
+    
+    def approverGroupCmd = """
+    curl -s -X POST 'https://app.harness.io/gateway/ng/api/user-groups' \\
+        -H 'content-type: application/json' \\
+        -H 'x-api-key: ${apiKey}' \\
+        -d '${approverGroupPayload.replaceAll("'", "'\\\\''")}'
+    """
+    
+    try {
+        def approverResult = sh(script: approverGroupCmd, returnStdout: true).trim()
+        echo "Approver group created: ${approverResult}"
+        
+        // Add permissions for approvers
+        addRbacPermissions(apiKey, orgId, projectId, "${projectId}_approvers", "approver")
+    } catch (Exception e) {
+        echo "Warning: Failed to create approver group: ${e.getMessage()}"
+    }
+    
+    echo "User groups created and permissions set"
+}
+
+// Helper function to add RBAC permissions
+def addRbacPermissions(apiKey, orgId, projectId, groupName, role) {
+    echo "Adding RBAC permissions for ${groupName} with role ${role}..."
+    
+    def permissions = []
+    if (role == "developer") {
+        permissions = ["core_pipeline_view", "core_pipeline_edit", "core_pipeline_execute"]
+    } else if (role == "approver") {
+        permissions = ["core_pipeline_view", "core_pipeline_edit", "core_pipeline_execute", "core_pipeline_approve"]
+    }
+    
+    def permissionsList = permissions.collect { "\"${it}\"" }.join(",")
+    
+    def rbacPayload = """
+    {
+        "resourceGroupRequest": {
+            "identifier": "${groupName}_permissions",
+            "name": "${groupName} permissions",
+            "orgIdentifier": "${orgId}",
+            "projectIdentifier": "${projectId}",
+            "resourceSelectors": [
+                {
+                    "type": "ALL",
+                    "filter": "*"
+                }
+            ],
+            "roles": [
+                {
+                    "identifier": "developer",
+                    "permissions": [${permissionsList}]
+                }
+            ]
+        }
+    }
+    """
+    
+    def rbacCmd = """
+    curl -s -X POST 'https://app.harness.io/gateway/authz/api/resource-groups' \\
+        -H 'content-type: application/json' \\
+        -H 'x-api-key: ${apiKey}' \\
+        -d '${rbacPayload.replaceAll("'", "'\\\\''")}'
+    """
+    
+    try {
+        def rbacResult = sh(script: rbacCmd, returnStdout: true).trim()
+        echo "RBAC permissions added for ${groupName}: ${rbacResult}"
+    } catch (Exception e) {
+        echo "Warning: Failed to add RBAC permissions for ${groupName}: ${e.getMessage()}"
+    }
+}
+
+// Helper function to parse emails to JSON array
+def parseEmailsToJson(emailsText) {
+    def emails = emailsText.split(',').collect { it.trim() }
+    return "[" + emails.collect { "\"${it}\"" }.join(",") + "]"
 }

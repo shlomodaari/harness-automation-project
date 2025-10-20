@@ -2,43 +2,77 @@
 
 /**
  * Harness Project Automation - Jenkins Pipeline
- * Uses Python directly with system packages
+ * With comprehensive parameter options and secure credential handling
  */
 
 pipeline {
     agent any
     
     parameters {
+        // Action Selection
         choice(
             name: 'ACTION',
             choices: ['create-project', 'create-templates', 'dry-run'],
             description: 'What action to perform'
         )
+        
+        // Project Information
         string(
             name: 'PROJECT_NAME',
-            defaultValue: 'my-new-project',
+            defaultValue: 'jenkins-project-1',
             description: 'Project name (used for repo_name in config)'
         )
         string(
-            name: 'PROJECT_DESCRIPTION',
-            defaultValue: 'Automated project creation',
-            description: 'Project description'
+            name: 'PROJECT_IDENTIFIER',
+            defaultValue: '',
+            description: 'Optional: Project identifier (defaults to PROJECT_NAME with special chars replaced by underscores)'
         )
         string(
-            name: 'HARNESS_ACCOUNT_ID',
-            defaultValue: '',
-            description: 'Harness Account ID'
+            name: 'PROJECT_DESCRIPTION',
+            defaultValue: 'Project created via Jenkins',
+            description: 'Project description'
         )
-        password(
-            name: 'HARNESS_API_KEY',
-            defaultValue: '',
-            description: 'Harness API Key'
+        
+        // Harness Base URL
+        string(
+            name: 'HARNESS_BASE_URL',
+            defaultValue: 'https://app.harness.io',
+            description: 'Harness base URL'
         )
         string(
             name: 'HARNESS_ORG_ID',
             defaultValue: 'default',
             description: 'Harness Organization ID'
         )
+        
+        // Connector Information
+        string(
+            name: 'CLUSTER_CONNECTOR',
+            defaultValue: '<+input>',
+            description: 'Cluster connector reference'
+        )
+        string(
+            name: 'DOCKER_CONNECTOR',
+            defaultValue: '<+input>',
+            description: 'Docker connector reference'
+        )
+        string(
+            name: 'DOCKER_REGISTRY_CONNECTOR',
+            defaultValue: '<+input>',
+            description: 'Docker registry connector reference'
+        )
+        string(
+            name: 'DOCKER_REGISTRY',
+            defaultValue: 'docker.io',
+            description: 'Docker registry URL'
+        )
+        string(
+            name: 'GIT_CONNECTOR',
+            defaultValue: '<+input>',
+            description: 'Git connector reference'
+        )
+        
+        // User Email Lists
         text(
             name: 'DEVELOPER_EMAILS',
             defaultValue: 'dev@example.com',
@@ -54,56 +88,98 @@ pipeline {
             defaultValue: 'ops@example.com',
             description: 'Operator emails (comma-separated)'
         )
+        
+        // Notification Settings
         string(
-            name: 'NONPROD_TEMPLATE_REF',
-            defaultValue: 'nonprod_deployment_pipeline',
-            description: 'NonProd template identifier'
+            name: 'SLACK_WEBHOOK',
+            defaultValue: '<+input>',
+            description: 'Slack webhook URL for notifications'
         )
         string(
-            name: 'NONPROD_TEMPLATE_VERSION',
-            defaultValue: 'v1760729233',
-            description: 'NonProd template version'
+            name: 'EMAIL_DOMAIN',
+            defaultValue: 'example.com',
+            description: 'Email domain for notifications'
         )
-        string(
-            name: 'PROD_TEMPLATE_REF',
-            defaultValue: 'prod_deployment_pipeline',
-            description: 'Prod template identifier'
-        )
-        string(
-            name: 'PROD_TEMPLATE_VERSION',
-            defaultValue: 'v1760729233',
-            description: 'Prod template version'
+        
+        // Feature Flags
+        booleanParam(
+            name: 'GIT_EXPERIENCE',
+            defaultValue: false,
+            description: 'Enable Git experience'
         )
         booleanParam(
             name: 'CREATE_RBAC',
             defaultValue: true,
             description: 'Create RBAC (user groups)'
         )
+        booleanParam(
+            name: 'CREATE_PIPELINES',
+            defaultValue: true,
+            description: 'Create pipelines'
+        )
+        
+        // Pipeline Templates
+        string(
+            name: 'NONPROD_PIPELINE_NAME',
+            defaultValue: 'NonProd Deployment Pipeline',
+            description: 'Non-production pipeline name'
+        )
+        string(
+            name: 'NONPROD_PIPELINE_IDENTIFIER',
+            defaultValue: 'nonprod_pipeline',
+            description: 'Non-production pipeline identifier'
+        )
+        string(
+            name: 'NONPROD_TEMPLATE_REF',
+            defaultValue: 'nonprod_deployment_pipeline',
+            description: 'Non-production template reference'
+        )
+        string(
+            name: 'NONPROD_TEMPLATE_VERSION',
+            defaultValue: 'v1760729233',
+            description: 'Non-production template version'
+        )
+        string(
+            name: 'PROD_PIPELINE_NAME',
+            defaultValue: 'Production Deployment Pipeline',
+            description: 'Production pipeline name'
+        )
+        string(
+            name: 'PROD_PIPELINE_IDENTIFIER',
+            defaultValue: 'prod_pipeline',
+            description: 'Production pipeline identifier'
+        )
+        string(
+            name: 'PROD_TEMPLATE_REF',
+            defaultValue: 'prod_deployment_pipeline',
+            description: 'Production template reference'
+        )
+        string(
+            name: 'PROD_TEMPLATE_VERSION',
+            defaultValue: 'v1760729233',
+            description: 'Production template version'
+        )
+        
+        // Advanced Options
+        booleanParam(
+            name: 'VERBOSE_OUTPUT',
+            defaultValue: true,
+            description: 'Show verbose output'
+        )
     }
     
     environment {
-        PYTHON_CMD = "python3"
+        // Use Jenkins credential bindings for sensitive information
+        HARNESS_CREDS = credentials('harness-api-credentials')
+        // HARNESS_CREDS_USR will contain the account ID
+        // HARNESS_CREDS_PSW will contain the API key
     }
     
     stages {
         stage('Checkout') {
             steps {
-                script {
-                    echo "🔄 Checking out code..."
-                    checkout scm
-                }
-            }
-        }
-        
-        stage('Verify Python') {
-            steps {
-                script {
-                    echo "🔍 Verifying Python installation..."
-                    sh "${PYTHON_CMD} --version"
-                    sh "pip3 --version"
-                    // Check if required packages are installed
-                    sh "python3 -c 'import yaml, requests; print(\"✅ Required packages are available\")'"
-                }
+                checkout scm
+                sh "ls -la scripts/"
             }
         }
         
@@ -112,7 +188,7 @@ pipeline {
                 script {
                     echo "📝 Generating configuration file..."
                     
-                    // Convert comma-separated emails to YAML list format
+                    // Convert comma-separated emails to YAML lists
                     def devEmails = params.DEVELOPER_EMAILS.split(',')
                         .collect { email -> "    - ${email.trim()}" }
                         .join('\n')
@@ -125,22 +201,28 @@ pipeline {
                         .collect { email -> "    - ${email.trim()}" }
                         .join('\n')
                     
+                    // Set project identifier if provided, otherwise use sanitized PROJECT_NAME
+                    def projectId = params.PROJECT_IDENTIFIER ?: 
+                        params.PROJECT_NAME.toLowerCase().replaceAll(/[^a-z0-9]/, '_')
+                    
+                    // Generate configuration file
                     def configContent = """harness:
-  account_id: "${params.HARNESS_ACCOUNT_ID}"
-  api_key: "${params.HARNESS_API_KEY}"
+  account_id: "${HARNESS_CREDS_USR}"
+  api_key: "${HARNESS_CREDS_PSW}"
   org_id: "${params.HARNESS_ORG_ID}"
-  base_url: "https://app.harness.io"
+  base_url: "${params.HARNESS_BASE_URL}"
 
 project:
   repo_name: "${params.PROJECT_NAME}"
+  identifier: "${projectId}"
   description: "${params.PROJECT_DESCRIPTION}"
 
 connectors:
-  cluster_connector: "<+input>"
-  docker_connector: "<+input>"
-  docker_registry_connector: "<+input>"
-  docker_registry: "docker.io"
-  git_connector: "<+input>"
+  cluster_connector: "${params.CLUSTER_CONNECTOR}"
+  docker_connector: "${params.DOCKER_CONNECTOR}"
+  docker_registry_connector: "${params.DOCKER_REGISTRY_CONNECTOR}"
+  docker_registry: "${params.DOCKER_REGISTRY}"
+  git_connector: "${params.GIT_CONNECTOR}"
 
 users:
   developers:
@@ -151,65 +233,60 @@ ${approverEmails}
 ${operatorEmails}
 
 notifications:
-  slack_webhook: "<+input>"
-  email_domain: "example.com"
+  slack_webhook: "${params.SLACK_WEBHOOK}"
+  email_domain: "${params.EMAIL_DOMAIN}"
 
 features:
-  git_experience: false
+  git_experience: ${params.GIT_EXPERIENCE}
   create_rbac: ${params.CREATE_RBAC}
-  create_pipelines: true
+  create_pipelines: ${params.CREATE_PIPELINES}
 
 pipelines:
   nonprod:
-    name: "NonProd Deployment Pipeline"
-    identifier: "nonprod_pipeline"
+    name: "${params.NONPROD_PIPELINE_NAME}"
+    identifier: "${params.NONPROD_PIPELINE_IDENTIFIER}"
     template_ref: "${params.NONPROD_TEMPLATE_REF}"
     version: "${params.NONPROD_TEMPLATE_VERSION}"
   prod:
-    name: "Production Deployment Pipeline"
-    identifier: "prod_pipeline"
+    name: "${params.PROD_PIPELINE_NAME}"
+    identifier: "${params.PROD_PIPELINE_IDENTIFIER}"
     template_ref: "${params.PROD_TEMPLATE_REF}"
     version: "${params.PROD_TEMPLATE_VERSION}"
 """
                     
                     writeFile file: 'jenkins-generated-config.yaml', text: configContent
-                    echo "✅ Configuration file generated: jenkins-generated-config.yaml"
                     
-                    // Display config for verification
-                    sh "cat jenkins-generated-config.yaml"
+                    // Display masked config without showing sensitive info
+                    echo "✅ Configuration file generated with these settings (sensitive info masked):"
+                    sh '''
+                    cat jenkins-generated-config.yaml | grep -v "api_key" | grep -v "account_id"
+                    echo "  account_id: \"********\" (masked for security)"
+                    echo "  api_key: \"********\" (masked for security)"
+                    '''
                 }
             }
         }
         
-        stage('Execute Automation') {
+        stage('Run Script') {
             steps {
                 script {
-                    echo "🚀 Executing Harness automation..."
+                    def actionFlag = ""
+                    def verboseFlag = params.VERBOSE_OUTPUT ? "--verbose" : ""
                     
-                    // NO LONGER NEEDED: Install dependencies - packages are already installed system-wide
-                    // sh "${PYTHON_CMD} -m pip install --user pyyaml requests"
-                    
-                    if (params.ACTION == 'create-templates') {
-                        echo "📋 Creating org-level templates..."
-                        sh """
-                            ${PYTHON_CMD} scripts/create_with_templates.py \\
-                                --config-file jenkins-generated-config.yaml \\
-                                --create-templates
-                        """
-                    } else if (params.ACTION == 'dry-run') {
-                        echo "🧪 Dry run mode - no changes will be made"
-                        sh """
-                            ${PYTHON_CMD} scripts/create_complete_project.py \\
-                                --config-file jenkins-generated-config.yaml \\
-                                --dry-run
-                        """
+                    if (params.ACTION == 'dry-run') {
+                        actionFlag = "--dry-run"
+                        echo "🧪 Running in DRY-RUN mode - no changes will be made"
+                    } else if (params.ACTION == 'create-templates') {
+                        actionFlag = "--create-templates"
+                        echo "📋 Creating org-level templates"
                     } else {
-                        echo "📦 Creating complete project..."
-                        sh """
-                            ${PYTHON_CMD} scripts/create_complete_project.py \\
-                                --config-file jenkins-generated-config.yaml
-                        """
+                        echo "📦 Creating complete project"
                     }
+                    
+                    // Run the script with the generated config
+                    sh """
+                    python3 scripts/create_complete_project.py --config-file jenkins-generated-config.yaml ${actionFlag} ${verboseFlag}
+                    """
                 }
             }
         }
@@ -220,7 +297,6 @@ pipelines:
                     echo "📁 Archiving results..."
                     archiveArtifacts artifacts: 'complete_setup_results_*.json', allowEmptyArchive: true
                     archiveArtifacts artifacts: 'template_setup_results_*.json', allowEmptyArchive: true
-                    archiveArtifacts artifacts: 'jenkins-generated-config.yaml', allowEmptyArchive: true
                 }
             }
         }
@@ -232,7 +308,7 @@ pipelines:
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "Project: ${params.PROJECT_NAME}"
             echo "Action: ${params.ACTION}"
-            echo "Check Harness UI: https://app.harness.io"
+            echo "Check Harness UI: ${params.HARNESS_BASE_URL}"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         }
         failure {
@@ -240,15 +316,8 @@ pipelines:
             echo "Check the logs above for error details."
         }
         always {
-            echo "Cleaning up sensitive files..."
-            script {
-                try {
-                    sh 'rm -f jenkins-generated-config.yaml'
-                    echo "Cleanup complete"
-                } catch (Exception e) {
-                    echo "Note: Could not clean up files, but this is not critical."
-                }
-            }
+            // Clean up the config file with sensitive information
+            sh "rm -f jenkins-generated-config.yaml"
         }
     }
 }

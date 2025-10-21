@@ -1,0 +1,239 @@
+# =============================================================================
+# COMPLETE DEPLOYMENT EXAMPLE
+# Full end-to-end deployment configuration
+# Includes: Environments, Infrastructures, Services, and Pipelines
+# =============================================================================
+
+harness:
+  account_id: "YOUR_ACCOUNT_ID"
+  api_key: "YOUR_API_KEY"
+  org_id: "default"
+
+project:
+  repo_name: "my_application"
+  description: "Complete application deployment"
+  tags:
+    app: "myapp"
+    team: "platform"
+
+# ===== ENVIRONMENTS =====
+environments:
+  - name: "Development"
+    identifier: "dev"
+    description: "Development environment"
+    type: "PreProduction"
+    tags:
+      environment: "dev"
+      tier: "non-prod"
+    variables:
+      - name: "LOG_LEVEL"
+        value: "DEBUG"
+        type: "String"
+      - name: "REPLICAS"
+        value: "2"
+        type: "String"
+      - name: "ENABLE_DEBUG"
+        value: "true"
+        type: "String"
+  
+  - name: "Staging"
+    identifier: "staging"
+    description: "Staging environment"
+    type: "PreProduction"
+    tags:
+      environment: "staging"
+      tier: "non-prod"
+    variables:
+      - name: "LOG_LEVEL"
+        value: "INFO"
+        type: "String"
+      - name: "REPLICAS"
+        value: "3"
+        type: "String"
+  
+  - name: "Production"
+    identifier: "prod"
+    description: "Production environment"
+    type: "Production"
+    tags:
+      environment: "prod"
+      tier: "production"
+      sla: "high"
+    variables:
+      - name: "LOG_LEVEL"
+        value: "WARN"
+        type: "String"
+      - name: "REPLICAS"
+        value: "5"
+        type: "String"
+      - name: "MAX_CONNECTIONS"
+        value: "1000"
+        type: "String"
+
+# ===== INFRASTRUCTURES =====
+infrastructures:
+  - name: "Dev Kubernetes"
+    identifier: "dev_k8s"
+    description: "Development Kubernetes cluster"
+    environment_ref: "dev"
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "dev"
+      platform: "kubernetes"
+    config:
+      connector_ref: "dev_k8s_connector"    # Reference to connector
+      namespace: "development"
+      release_name: "myapp-dev"
+      allow_simultaneous: true
+  
+  - name: "Staging Kubernetes"
+    identifier: "staging_k8s"
+    description: "Staging Kubernetes cluster"
+    environment_ref: "staging"
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "staging"
+    config:
+      connector_ref: "prod_k8s_connector"
+      namespace: "staging"
+      release_name: "myapp-staging"
+      allow_simultaneous: true
+  
+  - name: "Production Kubernetes"
+    identifier: "prod_k8s"
+    description: "Production Kubernetes cluster"
+    environment_ref: "prod"
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "prod"
+      platform: "kubernetes"
+    config:
+      connector_ref: "prod_k8s_connector"
+      namespace: "production"
+      release_name: "myapp-prod"
+      allow_simultaneous: false              # No simultaneous deployments in prod
+
+# ===== SERVICES =====
+services:
+  - name: "Backend API"
+    identifier: "backend_api"
+    description: "Main backend REST API"
+    type: "Kubernetes"
+    tags:
+      component: "backend"
+      tier: "api"
+      language: "java"
+    config:
+      manifests:
+        - identifier: "backend_manifests"
+          type: "K8sManifest"
+          connector_ref: "github_connector"     # Reference to GitHub connector
+          git_details:
+            branch: "main"
+            paths:
+              - "k8s/backend/"
+              - "k8s/common/"
+      artifacts:
+        - identifier: "backend_image"
+          type: "DockerRegistry"
+          connector_ref: "dockerhub"            # Reference to Docker connector
+          image_path: "myorg/backend-api"
+  
+  - name: "Frontend Web"
+    identifier: "frontend_web"
+    description: "Frontend web application"
+    type: "Kubernetes"
+    tags:
+      component: "frontend"
+      tier: "web"
+      language: "react"
+    config:
+      manifests:
+        - identifier: "frontend_manifests"
+          type: "K8sManifest"
+          connector_ref: "github_connector"
+          git_details:
+            branch: "main"
+            paths:
+              - "k8s/frontend/"
+      artifacts:
+        - identifier: "frontend_image"
+          type: "DockerRegistry"
+          connector_ref: "dockerhub"
+          image_path: "myorg/frontend-web"
+
+# ===== PIPELINES =====
+pipelines:
+  dev_deployment:
+    name: "Dev Deployment"
+    identifier: "dev_deployment"
+    description: "Automated deployment to development"
+    template_ref: "deployment_template"       # Your template identifier
+    version: "v1"                             # Template version
+    tags:
+      environment: "dev"
+      type: "deployment"
+  
+  staging_deployment:
+    name: "Staging Deployment"
+    identifier: "staging_deployment"
+    description: "Deployment to staging with approval"
+    template_ref: "deployment_template"
+    version: "v1"
+    tags:
+      environment: "staging"
+      approval: "required"
+  
+  prod_deployment:
+    name: "Production Deployment"
+    identifier: "prod_deployment"
+    description: "Production deployment with canary"
+    template_ref: "deployment_template"
+    version: "v1"
+    tags:
+      environment: "prod"
+      strategy: "canary"
+      approval: "required"
+
+# =============================================================================
+# CONFIGURATION NOTES
+# =============================================================================
+#
+# ENVIRONMENTS:
+# - type: "Production" or "PreProduction"
+# - variables: Key-value pairs available in deployments
+#
+# INFRASTRUCTURES:
+# - type: "KubernetesDirect" (currently supported)
+# - connector_ref: Must reference an existing Kubernetes connector
+# - namespace: Kubernetes namespace for deployments
+# - release_name: Helm release name
+# - allow_simultaneous: Allow multiple deployments at once
+#
+# SERVICES:
+# - type: "Kubernetes" (currently supported)
+# - manifests: K8s manifests from Git
+# - artifacts: Docker images from registry
+# - connector_ref: References to connectors (can use <+input> for runtime)
+#
+# PIPELINES:
+# - template_ref: Must reference an existing pipeline template
+# - version: Template version to use
+#
+# =============================================================================
+# DEPLOYMENT FLOW
+# =============================================================================
+#
+# 1. Create Project
+# 2. Create Connectors (K8s, GitHub, Docker)
+# 3. Create Secrets (if needed)
+# 4. Create Environments
+# 5. Create Infrastructures
+# 6. Create Services
+# 7. Create Pipelines
+# 8. Execute Pipelines from Harness UI
+#
+# =============================================================================

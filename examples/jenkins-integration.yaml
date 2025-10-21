@@ -1,0 +1,168 @@
+# =============================================================================
+# JENKINS INTEGRATION EXAMPLE
+# This example is designed to work with Jenkins CI/CD
+# =============================================================================
+
+harness:
+  account_id: "${HARNESS_ACCOUNT_ID}"  # Jenkins credential or environment variable
+  api_key: "${HARNESS_API_KEY}"        # Jenkins credential or environment variable
+  org_id: "default"
+
+# =============================================================================
+# PROJECT
+# =============================================================================
+project:
+  repo_name: "jenkins_demo"
+  description: "Project created via Jenkins pipeline"
+  tags:
+    managed_by: "jenkins"
+    ci_cd: "automated"
+
+# =============================================================================
+# CONNECTORS
+# =============================================================================
+connectors:
+  # Kubernetes for deployments
+  kubernetes:
+    - name: "Jenkins K8s"
+      identifier: "jenkins_k8s"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors: ["jenkins-delegate"]
+      tags:
+        source: "jenkins"
+  
+  # GitHub for source code
+  github:
+    - name: "Jenkins GitHub"
+      identifier: "jenkins_github"
+      url: "https://github.com/${GIT_ORG}"
+      validation_repo: "${GIT_ORG}/${GIT_REPO}"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "github_token_from_jenkins"
+      api_access:
+        type: "Token"
+        token_ref: "github_token_from_jenkins"
+      delegate_selectors: []
+      tags:
+        source: "jenkins"
+
+# =============================================================================
+# ENVIRONMENTS
+# =============================================================================
+environments:
+  - name: "${ENV_NAME}"  # Passed from Jenkins parameter
+    identifier: "${ENV_ID}"
+    type: "PreProduction"
+    tags:
+      created_by: "jenkins"
+      build_number: "${BUILD_NUMBER}"
+    variables:
+      - name: "BUILD_NUMBER"
+        value: "${BUILD_NUMBER}"
+        type: "String"
+      - name: "GIT_COMMIT"
+        value: "${GIT_COMMIT}"
+        type: "String"
+
+# =============================================================================
+# INFRASTRUCTURE
+# =============================================================================
+infrastructures:
+  - name: "${ENV_NAME} Infrastructure"
+    identifier: "${ENV_ID}_infra"
+    environment_ref: "${ENV_ID}"
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    config:
+      connector_ref: "jenkins_k8s"
+      namespace: "${K8S_NAMESPACE}"
+      release_name: "app-${ENV_ID}"
+      allow_simultaneous: true
+    tags:
+      jenkins_job: "${JOB_NAME}"
+
+# =============================================================================
+# SERVICE
+# =============================================================================
+services:
+  - name: "${APP_NAME}"
+    identifier: "${APP_ID}"
+    type: "Kubernetes"
+    tags:
+      app: "${APP_NAME}"
+      build: "${BUILD_NUMBER}"
+    config:
+      manifests:
+        - identifier: "k8s_manifests"
+          type: "K8sManifest"
+          connector_ref: "jenkins_github"
+          git_details:
+            branch: "${GIT_BRANCH}"
+            paths:
+              - "k8s/"
+      artifacts:
+        - identifier: "app_image"
+          type: "DockerRegistry"
+          connector_ref: "<+input>"
+          image_path: "${DOCKER_IMAGE}"
+
+# =============================================================================
+# JENKINS PIPELINE USAGE
+# =============================================================================
+#
+# Jenkinsfile example:
+#
+# pipeline {
+#     agent any
+#     
+#     environment {
+#         HARNESS_ACCOUNT_ID = credentials('harness-account-id')
+#         HARNESS_API_KEY = credentials('harness-api-key')
+#         GIT_ORG = 'my-org'
+#         GIT_REPO = 'my-repo'
+#         ENV_NAME = 'Development'
+#         ENV_ID = 'dev'
+#         K8S_NAMESPACE = 'development'
+#         APP_NAME = 'My Application'
+#         APP_ID = 'my_app'
+#         DOCKER_IMAGE = 'myorg/myapp'
+#     }
+#     
+#     stages {
+#         stage('Create Harness Resources') {
+#             steps {
+#                 sh '''
+#                     python3 scripts/create_resources.py \\
+#                         --config examples/jenkins-integration.yaml
+#                 '''
+#             }
+#         }
+#     }
+# }
+#
+# =============================================================================
+# JENKINS CREDENTIALS SETUP
+# =============================================================================
+#
+# In Jenkins, create these credentials:
+#
+# 1. harness-account-id (Secret text)
+#    - Your Harness account ID
+#
+# 2. harness-api-key (Secret text)
+#    - Your Harness API key
+#
+# 3. github-token (Secret text) - if using private repos
+#    - GitHub personal access token
+#
+# =============================================================================
+# WEBHOOK INTEGRATION
+# =============================================================================
+#
+# See webhook-config.yaml for webhook handler setup
+# See JENKINS_INTEGRATION_SUMMARY.md for full documentation
+#
+# =============================================================================

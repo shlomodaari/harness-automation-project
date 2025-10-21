@@ -52,3 +52,8 @@ test-run-output.log
 *.tmp
 *.temp
 .cache/
+
+# Test files
+test-*.yaml
+test_*.yaml
+harness_resources_*.json

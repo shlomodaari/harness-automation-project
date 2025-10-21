@@ -1,0 +1,741 @@
+# =============================================================================
+# COMPLETE HARNESS AUTOMATION EXAMPLE
+# This example demonstrates ALL supported features
+# =============================================================================
+
+harness:
+  account_id: "YOUR_ACCOUNT_ID"  # Replace with your Harness account ID
+  api_key: "YOUR_API_KEY"        # Replace with your Harness API key
+  org_id: "default"              # Your organization ID
+
+# =============================================================================
+# PROJECT
+# =============================================================================
+project:
+  repo_name: "comprehensive_test"
+  description: "Complete example showing ALL SDK features"
+  tags:
+    example: "complete"
+    version: "v4.0"
+    managed_by: "harness_sdk"
+
+# =============================================================================
+# CONNECTORS - All Types
+# =============================================================================
+connectors:
+  # --- Cloud Providers ---
+  
+  # Kubernetes
+  kubernetes:
+    - name: "Production Kubernetes"
+      identifier: "prod_k8s"
+      description: "Production Kubernetes cluster"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors: ["primary"]
+      tags:
+        cloud: "kubernetes"
+        environment: "prod"
+    
+    - name: "Development Kubernetes"
+      identifier: "dev_k8s"
+      description: "Development Kubernetes cluster"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors: ["dev-delegate"]
+      tags:
+        cloud: "kubernetes"
+        environment: "dev"
+  
+  # AWS
+  aws:
+    - name: "AWS Production Account"
+      identifier: "aws_prod"
+      description: "AWS production account with delegate credentials"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors: ["aws-prod-delegate"]
+      tags:
+        cloud: "aws"
+        environment: "prod"
+    
+    - name: "AWS Development Account"
+      identifier: "aws_dev"
+      description: "AWS dev account with manual credentials"
+      credential_type: "ManualConfig"
+      access_key_ref: "aws_dev_access_key"
+      secret_key_ref: "aws_dev_secret_key"
+      delegate_selectors: ["aws-dev-delegate"]
+      tags:
+        cloud: "aws"
+        environment: "dev"
+  
+  # GCP
+  gcp:
+    - name: "GCP Production Project"
+      identifier: "gcp_prod"
+      description: "GCP production project"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors: ["gcp-prod-delegate"]
+      tags:
+        cloud: "gcp"
+        environment: "prod"
+    
+    - name: "GCP Development Project"
+      identifier: "gcp_dev"
+      description: "GCP dev project with service account"
+      credential_type: "ManualConfig"
+      secret_key_ref: "gcp_dev_service_account"
+      delegate_selectors: ["gcp-dev-delegate"]
+      tags:
+        cloud: "gcp"
+        environment: "dev"
+  
+  # Azure
+  azure:
+    - name: "Azure Production Subscription"
+      identifier: "azure_prod"
+      description: "Azure production subscription"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors: ["azure-prod-delegate"]
+      tags:
+        cloud: "azure"
+        environment: "prod"
+    
+    - name: "Azure Development Subscription"
+      identifier: "azure_dev"
+      description: "Azure dev subscription with service principal"
+      credential_type: "ManualConfig"
+      client_id: "<+input>"
+      tenant_id: "<+input>"
+      secret_ref: "azure_dev_secret"
+      delegate_selectors: ["azure-dev-delegate"]
+      tags:
+        cloud: "azure"
+        environment: "dev"
+  
+  # --- Source Control ---
+  
+  # GitHub
+  github:
+    - name: "GitHub Organization"
+      identifier: "github_main"
+      description: "Main GitHub organization repositories"
+      url: "https://github.com/myorg"
+      validation_repo: "myorg/infrastructure"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "github_pat"
+      api_access:
+        type: "Token"
+        token_ref: "github_pat"
+      delegate_selectors: []
+      execute_on_delegate: false
+      tags:
+        scm: "github"
+        type: "source_control"
+    
+    - name: "GitHub Microservices"
+      identifier: "github_microservices"
+      description: "Microservices repositories"
+      url: "https://github.com/myorg"
+      validation_repo: "myorg/backend-api"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "github_pat"
+      api_access:
+        type: "Token"
+        token_ref: "github_pat"
+      delegate_selectors: []
+      tags:
+        scm: "github"
+        component: "microservices"
+  
+  # GitLab
+  gitlab:
+    - name: "GitLab Enterprise"
+      identifier: "gitlab_enterprise"
+      description: "GitLab enterprise repositories"
+      url: "https://gitlab.com/enterprise"
+      validation_repo: "enterprise/core-platform"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "gitlab_token"
+      api_access:
+        type: "Token"
+        token_ref: "gitlab_token"
+      delegate_selectors: []
+      tags:
+        scm: "gitlab"
+        type: "source_control"
+  
+  # Bitbucket
+  bitbucket:
+    - name: "Bitbucket Cloud"
+      identifier: "bitbucket_cloud"
+      description: "Bitbucket cloud repositories"
+      url: "https://bitbucket.org/mycompany"
+      validation_repo: "mycompany/platform"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "bitbucket_app_password"
+      api_access:
+        type: "Token"
+        token_ref: "bitbucket_app_password"
+      delegate_selectors: []
+      tags:
+        scm: "bitbucket"
+        type: "source_control"
+  
+  # --- Artifact Repositories ---
+  
+  # Docker
+  docker:
+    - name: "Docker Hub Public"
+      identifier: "dockerhub_public"
+      description: "Docker Hub for public images"
+      registry_url: "https://index.docker.io/v2/"
+      auth_type: "UsernamePassword"
+      username: "mycompany"
+      password_ref: "dockerhub_password"
+      delegate_selectors: []
+      tags:
+        registry: "docker"
+        access: "public"
+    
+    - name: "Private Docker Registry"
+      identifier: "docker_private"
+      description: "Private company Docker registry"
+      registry_url: "https://registry.mycompany.com"
+      auth_type: "UsernamePassword"
+      username: "admin"
+      password_ref: "private_registry_password"
+      delegate_selectors: []
+      tags:
+        registry: "docker"
+        access: "private"
+    
+    - name: "Docker Anonymous"
+      identifier: "docker_anonymous"
+      description: "Docker Hub anonymous access"
+      registry_url: "https://index.docker.io/v2/"
+      auth_type: "Anonymous"
+      delegate_selectors: []
+      tags:
+        registry: "docker"
+        access: "anonymous"
+
+# =============================================================================
+# SECRETS - All Types
+# =============================================================================
+secrets:
+  # --- Text Secrets ---
+  text_secrets:
+    # Source Control Tokens
+    - name: "GitHub Personal Access Token"
+      identifier: "github_pat"
+      description: "GitHub PAT for repository access"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "token"
+        service: "github"
+    
+    - name: "GitLab Access Token"
+      identifier: "gitlab_token"
+      description: "GitLab token for repository access"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "token"
+        service: "gitlab"
+    
+    - name: "Bitbucket App Password"
+      identifier: "bitbucket_app_password"
+      description: "Bitbucket app password"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "token"
+        service: "bitbucket"
+    
+    # Docker Registry Credentials
+    - name: "Docker Hub Password"
+      identifier: "dockerhub_password"
+      description: "Docker Hub account password"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "password"
+        service: "dockerhub"
+    
+    - name: "Private Registry Password"
+      identifier: "private_registry_password"
+      description: "Private Docker registry password"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "password"
+        service: "docker_private"
+    
+    # Cloud Provider Credentials
+    - name: "AWS Dev Access Key"
+      identifier: "aws_dev_access_key"
+      description: "AWS development access key ID"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "access_key"
+        cloud: "aws"
+        environment: "dev"
+    
+    - name: "AWS Dev Secret Key"
+      identifier: "aws_dev_secret_key"
+      description: "AWS development secret access key"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "secret_key"
+        cloud: "aws"
+        environment: "dev"
+    
+    - name: "Azure Dev Secret"
+      identifier: "azure_dev_secret"
+      description: "Azure service principal secret"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "secret"
+        cloud: "azure"
+        environment: "dev"
+    
+    # API Keys
+    - name: "External API Key"
+      identifier: "external_api_key"
+      description: "External service API key"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "api_key"
+        service: "external"
+    
+    # Database Passwords
+    - name: "Production Database Password"
+      identifier: "prod_db_password"
+      description: "Production database password"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "password"
+        service: "database"
+        environment: "prod"
+  
+  # --- File Secrets ---
+  file_secrets:
+    - name: "GCP Dev Service Account"
+      identifier: "gcp_dev_service_account"
+      description: "GCP development service account JSON key"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "service_account"
+        cloud: "gcp"
+        environment: "dev"
+    
+    - name: "SSH Private Key"
+      identifier: "ssh_private_key"
+      description: "SSH private key for server access"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "ssh_key"
+    
+    - name: "TLS Certificate"
+      identifier: "tls_certificate"
+      description: "TLS certificate for HTTPS"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "certificate"
+
+# =============================================================================
+# ACCESS CONTROL (RBAC)
+# =============================================================================
+access_control:
+  # --- User Groups ---
+  user_groups:
+    - name: "Platform Engineering Team"
+      identifier: "platform_engineers"
+      description: "Platform engineering team with full access"
+      users:
+        - shlomo.daari@harness.io
+      tags:
+        team: "platform"
+        access_level: "admin"
+    
+    - name: "Development Team"
+      identifier: "developers"
+      description: "Application developers"
+      users:
+        - shlomo.daari@harness.io
+      tags:
+        team: "development"
+        access_level: "developer"
+    
+    - name: "Operations Team"
+      identifier: "operations"
+      description: "Operations and SRE team"
+      users:
+        - shlomo.daari@harness.io
+      tags:
+        team: "operations"
+        access_level: "operator"
+  
+  # --- Service Accounts ---
+  service_accounts:
+    - name: "CI Pipeline Service Account"
+      identifier: "ci_pipeline_sa"
+      description: "Service account for CI pipeline automation"
+      email: "ci-pipeline@harness.serviceaccount"
+      create_token: false
+      tags:
+        purpose: "ci"
+        automation: "pipeline"
+    
+    - name: "CD Pipeline Service Account"
+      identifier: "cd_pipeline_sa"
+      description: "Service account for CD pipeline automation"
+      email: "cd-pipeline@harness.serviceaccount"
+      create_token: false
+      tags:
+        purpose: "cd"
+        automation: "pipeline"
+    
+    - name: "Monitoring Service Account"
+      identifier: "monitoring_sa"
+      description: "Service account for monitoring integrations"
+      email: "monitoring@harness.serviceaccount"
+      create_token: false
+      tags:
+        purpose: "monitoring"
+        automation: "integration"
+
+# =============================================================================
+# ENVIRONMENTS
+# =============================================================================
+environments:
+  - name: "Development"
+    identifier: "dev"
+    description: "Development environment for testing"
+    type: "PreProduction"
+    tags:
+      environment: "dev"
+      tier: "non-prod"
+    variables:
+      - name: "LOG_LEVEL"
+        value: "DEBUG"
+        type: "String"
+      - name: "REPLICAS"
+        value: "2"
+        type: "String"
+      - name: "ENABLE_DEBUG"
+        value: "true"
+        type: "String"
+  
+  - name: "Staging"
+    identifier: "staging"
+    description: "Staging environment for pre-production testing"
+    type: "PreProduction"
+    tags:
+      environment: "staging"
+      tier: "non-prod"
+    variables:
+      - name: "LOG_LEVEL"
+        value: "INFO"
+        type: "String"
+      - name: "REPLICAS"
+        value: "3"
+        type: "String"
+      - name: "ENABLE_DEBUG"
+        value: "false"
+        type: "String"
+  
+  - name: "Production"
+    identifier: "prod"
+    description: "Production environment"
+    type: "Production"
+    tags:
+      environment: "prod"
+      tier: "production"
+      sla: "high"
+    variables:
+      - name: "LOG_LEVEL"
+        value: "WARN"
+        type: "String"
+      - name: "REPLICAS"
+        value: "5"
+        type: "String"
+      - name: "ENABLE_DEBUG"
+        value: "false"
+        type: "String"
+      - name: "MAX_CONNECTIONS"
+        value: "1000"
+        type: "String"
+
+# =============================================================================
+# INFRASTRUCTURES
+# =============================================================================
+infrastructures:
+  # Development Infrastructure
+  - name: "Development Kubernetes"
+    identifier: "dev_k8s_infra"
+    description: "Development Kubernetes infrastructure"
+    environment_ref: "dev"
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "dev"
+      platform: "kubernetes"
+    config:
+      connector_ref: "dev_k8s"
+      namespace: "development"
+      release_name: "dev-release"
+      allow_simultaneous: true
+  
+  # Staging Infrastructure
+  - name: "Staging Kubernetes"
+    identifier: "staging_k8s_infra"
+    description: "Staging Kubernetes infrastructure"
+    environment_ref: "staging"
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "staging"
+      platform: "kubernetes"
+    config:
+      connector_ref: "prod_k8s"
+      namespace: "staging"
+      release_name: "staging-release"
+      allow_simultaneous: true
+  
+  # Production Infrastructure - Primary
+  - name: "Production Kubernetes Primary"
+    identifier: "prod_k8s_primary"
+    description: "Production Kubernetes infrastructure - Primary cluster"
+    environment_ref: "prod"
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "prod"
+      platform: "kubernetes"
+      cluster: "primary"
+    config:
+      connector_ref: "prod_k8s"
+      namespace: "production"
+      release_name: "prod-release"
+      allow_simultaneous: false
+  
+  # Production Infrastructure - DR
+  - name: "Production Kubernetes DR"
+    identifier: "prod_k8s_dr"
+    description: "Production Kubernetes infrastructure - DR cluster"
+    environment_ref: "prod"
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "prod"
+      platform: "kubernetes"
+      cluster: "dr"
+    config:
+      connector_ref: "<+input>"
+      namespace: "production-dr"
+      release_name: "prod-dr-release"
+      allow_simultaneous: false
+
+# =============================================================================
+# SERVICES
+# =============================================================================
+services:
+  # Backend API Service
+  - name: "Backend API"
+    identifier: "backend_api"
+    description: "Main backend REST API service"
+    type: "Kubernetes"
+    tags:
+      component: "backend"
+      tier: "api"
+      language: "java"
+    config:
+      manifests:
+        - identifier: "backend_k8s_manifests"
+          type: "K8sManifest"
+          connector_ref: "github_microservices"
+          git_details:
+            branch: "main"
+            paths:
+              - "k8s/backend/"
+              - "k8s/common/"
+      artifacts:
+        - identifier: "backend_api_image"
+          type: "DockerRegistry"
+          connector_ref: "dockerhub_public"
+          image_path: "mycompany/backend-api"
+  
+  # Frontend Web Service
+  - name: "Frontend Web"
+    identifier: "frontend_web"
+    description: "Frontend web application"
+    type: "Kubernetes"
+    tags:
+      component: "frontend"
+      tier: "web"
+      language: "react"
+    config:
+      manifests:
+        - identifier: "frontend_k8s_manifests"
+          type: "K8sManifest"
+          connector_ref: "github_microservices"
+          git_details:
+            branch: "main"
+            paths:
+              - "k8s/frontend/"
+              - "k8s/common/"
+      artifacts:
+        - identifier: "frontend_web_image"
+          type: "DockerRegistry"
+          connector_ref: "dockerhub_public"
+          image_path: "mycompany/frontend-web"
+  
+  # Worker Service
+  - name: "Background Worker"
+    identifier: "background_worker"
+    description: "Background job processing worker"
+    type: "Kubernetes"
+    tags:
+      component: "worker"
+      tier: "background"
+      language: "python"
+    config:
+      manifests:
+        - identifier: "worker_k8s_manifests"
+          type: "K8sManifest"
+          connector_ref: "github_microservices"
+          git_details:
+            branch: "main"
+            paths:
+              - "k8s/worker/"
+              - "k8s/common/"
+      artifacts:
+        - identifier: "worker_image"
+          type: "DockerRegistry"
+          connector_ref: "docker_private"
+          image_path: "mycompany/background-worker"
+  
+  # Microservice - User Service
+  - name: "User Microservice"
+    identifier: "user_microservice"
+    description: "User management microservice"
+    type: "Kubernetes"
+    tags:
+      component: "microservice"
+      tier: "api"
+      domain: "user"
+    config:
+      manifests:
+        - identifier: "user_k8s_manifests"
+          type: "K8sManifest"
+          connector_ref: "github_microservices"
+          git_details:
+            branch: "main"
+            paths:
+              - "k8s/microservices/user/"
+      artifacts:
+        - identifier: "user_service_image"
+          type: "DockerRegistry"
+          connector_ref: "dockerhub_public"
+          image_path: "mycompany/user-service"
+
+# =============================================================================
+# PIPELINES
+# =============================================================================
+pipelines:
+  # Development Deployment Pipeline
+  dev_deployment:
+    name: "Development Deployment"
+    identifier: "dev_deployment"
+    description: "Automated deployment to development environment"
+    template_ref: "nonprod_deployment_pipeline"
+    version: "v1760729233"
+    tags:
+      environment: "dev"
+      type: "deployment"
+      automation: "full"
+  
+  # Staging Deployment Pipeline
+  staging_deployment:
+    name: "Staging Deployment"
+    identifier: "staging_deployment"
+    description: "Deployment to staging environment with approval"
+    template_ref: "nonprod_deployment_pipeline"
+    version: "v1760729233"
+    tags:
+      environment: "staging"
+      type: "deployment"
+      approval: "required"
+  
+  # Production Deployment Pipeline
+  prod_deployment:
+    name: "Production Deployment"
+    identifier: "prod_deployment"
+    description: "Production deployment with approvals and canary"
+    template_ref: "nonprod_deployment_pipeline"
+    version: "v1760729233"
+    tags:
+      environment: "prod"
+      type: "deployment"
+      strategy: "canary"
+      approval: "required"
+  
+  # Rollback Pipeline
+  rollback_pipeline:
+    name: "Emergency Rollback"
+    identifier: "emergency_rollback"
+    description: "Emergency rollback pipeline for production"
+    template_ref: "nonprod_deployment_pipeline"
+    version: "v1760729233"
+    tags:
+      type: "rollback"
+      priority: "critical"
+
+# =============================================================================
+# END OF CONFIGURATION
+# =============================================================================
+# 
+# This example creates:
+# - 1 Project
+# - 13 Connectors (K8s, AWS, GCP, Azure, GitHub, GitLab, Bitbucket, Docker)
+# - 13 Secrets (10 text, 3 file)
+# - 6 RBAC resources (3 user groups, 3 service accounts)
+# - 3 Environments (Dev, Staging, Prod)
+# - 4 Infrastructures (Dev, Staging, Prod Primary, Prod DR)
+# - 4 Services (Backend API, Frontend, Worker, User Microservice)
+# - 4 Pipelines (Dev, Staging, Prod, Rollback)
+#
+# TOTAL: 48 resources created with ONE command!
+#
+# Run with:
+# python3 scripts/create_resources.py --config COMPLETE_EXAMPLE.yaml
+#
+# =============================================================================

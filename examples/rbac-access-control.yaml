@@ -1,0 +1,139 @@
+# =============================================================================
+# RBAC (Access Control) EXAMPLE
+# This example shows how to configure user groups and service accounts
+# =============================================================================
+
+harness:
+  account_id: "YOUR_ACCOUNT_ID"
+  api_key: "YOUR_API_KEY"
+  org_id: "default"
+
+project:
+  repo_name: "rbac_example"
+  description: "RBAC configuration example"
+
+access_control:
+  # ===== USER GROUPS =====
+  user_groups:
+    # Platform Engineering Team
+    - name: "Platform Engineers"
+      identifier: "platform_engineers"
+      description: "Platform engineering team with admin access"
+      users:
+        - user1@company.com       # Replace with actual user emails
+        - user2@company.com
+        - user3@company.com
+      tags:
+        team: "platform"
+        access_level: "admin"
+    
+    # Development Team
+    - name: "Developers"
+      identifier: "developers"
+      description: "Application development team"
+      users:
+        - dev1@company.com
+        - dev2@company.com
+      tags:
+        team: "development"
+        access_level: "developer"
+    
+    # Operations Team
+    - name: "Operations"
+      identifier: "operations"
+      description: "Operations and SRE team"
+      users:
+        - ops1@company.com
+        - ops2@company.com
+      tags:
+        team: "operations"
+        access_level: "operator"
+    
+    # QA Team
+    - name: "QA Team"
+      identifier: "qa_team"
+      description: "Quality assurance team"
+      users:
+        - qa1@company.com
+      tags:
+        team: "qa"
+        access_level: "read_only"
+  
+  # ===== SERVICE ACCOUNTS =====
+  service_accounts:
+    # CI Pipeline Service Account
+    - name: "CI Pipeline"
+      identifier: "ci_pipeline_sa"
+      description: "Service account for CI pipeline automation"
+      email: "ci-pipeline@harness.serviceaccount"
+      create_token: false          # Set to true to auto-generate API token
+      tags:
+        purpose: "ci"
+        automation: "pipeline"
+    
+    # CD Pipeline Service Account
+    - name: "CD Pipeline"
+      identifier: "cd_pipeline_sa"
+      description: "Service account for CD deployments"
+      email: "cd-pipeline@harness.serviceaccount"
+      create_token: false
+      tags:
+        purpose: "cd"
+        automation: "deployment"
+    
+    # Monitoring Integration
+    - name: "Monitoring"
+      identifier: "monitoring_sa"
+      description: "Service account for monitoring integrations"
+      email: "monitoring@harness.serviceaccount"
+      create_token: false
+      tags:
+        purpose: "monitoring"
+        automation: "integration"
+    
+    # Terraform Automation
+    - name: "Terraform"
+      identifier: "terraform_sa"
+      description: "Service account for Terraform automation"
+      email: "terraform@harness.serviceaccount"
+      create_token: true           # Generate token for Terraform
+      tags:
+        purpose: "iac"
+        automation: "terraform"
+
+# =============================================================================
+# CONFIGURATION OPTIONS
+# =============================================================================
+#
+# USER GROUPS:
+# - name: Display name for the group
+# - identifier: Unique ID (lowercase, underscores)
+# - description: Purpose of the group
+# - users: List of user email addresses (must exist in Harness)
+# - tags: Key-value pairs for organization
+#
+# SERVICE ACCOUNTS:
+# - name: Display name for the service account
+# - identifier: Unique ID (lowercase, underscores)
+# - description: Purpose of the service account
+# - email: Service account email (auto-generated format recommended)
+# - create_token: true/false - Auto-generate API token
+# - tags: Key-value pairs for organization
+#
+# =============================================================================
+# USAGE NOTES
+# =============================================================================
+#
+# User Groups:
+# - Users must already exist in your Harness account
+# - The SDK automatically looks up user IDs from email addresses
+# - Groups can be assigned roles and permissions in Harness UI
+# - Idempotent: Safe to run multiple times
+#
+# Service Accounts:
+# - Used for automation and integrations
+# - Can be assigned API tokens for authentication
+# - Assign roles/permissions in Harness UI after creation
+# - Email format: name@harness.serviceaccount
+#
+# =============================================================================

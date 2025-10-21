@@ -1,0 +1,166 @@
+# =============================================================================
+# ALL CONNECTOR TYPES EXAMPLE
+# This example demonstrates all supported connector types
+# =============================================================================
+
+harness:
+  account_id: "YOUR_ACCOUNT_ID"
+  api_key: "YOUR_API_KEY"
+  org_id: "default"
+
+project:
+  repo_name: "connector_examples"
+  description: "Examples of all connector types"
+
+connectors:
+  # ===== CLOUD PROVIDERS =====
+  
+  # Kubernetes Connector
+  kubernetes:
+    - name: "Production Kubernetes"
+      identifier: "prod_k8s"
+      description: "Production K8s cluster"
+      credential_type: "InheritFromDelegate"  # or "ManualConfig"
+      delegate_selectors:
+        - "primary-delegate"
+      tags:
+        environment: "prod"
+  
+  # AWS Connector - Inherit from Delegate
+  aws:
+    - name: "AWS Production"
+      identifier: "aws_prod"
+      description: "AWS production account"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors:
+        - "aws-delegate"
+      tags:
+        cloud: "aws"
+    
+    # AWS Connector - Manual Credentials
+    - name: "AWS Development"
+      identifier: "aws_dev"
+      description: "AWS dev with manual credentials"
+      credential_type: "ManualConfig"
+      access_key_ref: "aws_access_key"      # Reference to secret
+      secret_key_ref: "aws_secret_key"      # Reference to secret
+      delegate_selectors:
+        - "aws-delegate"
+  
+  # GCP Connector
+  gcp:
+    - name: "GCP Production"
+      identifier: "gcp_prod"
+      description: "GCP production project"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors:
+        - "gcp-delegate"
+      tags:
+        cloud: "gcp"
+  
+  # Azure Connector
+  azure:
+    - name: "Azure Production"
+      identifier: "azure_prod"
+      description: "Azure production subscription"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors:
+        - "azure-delegate"
+      tags:
+        cloud: "azure"
+  
+  # ===== SOURCE CONTROL =====
+  
+  # GitHub Connector
+  github:
+    - name: "GitHub Repos"
+      identifier: "github_main"
+      description: "GitHub repositories"
+      url: "https://github.com/myorg"
+      validation_repo: "myorg/myrepo"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "github_token"           # Reference to secret
+      api_access:
+        type: "Token"
+        token_ref: "github_token"
+      delegate_selectors: []
+      execute_on_delegate: false
+      tags:
+        scm: "github"
+  
+  # GitLab Connector
+  gitlab:
+    - name: "GitLab Repos"
+      identifier: "gitlab_main"
+      description: "GitLab repositories"
+      url: "https://gitlab.com/myorg"
+      validation_repo: "myorg/myrepo"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "gitlab_token"
+      api_access:
+        type: "Token"
+        token_ref: "gitlab_token"
+      delegate_selectors: []
+      tags:
+        scm: "gitlab"
+  
+  # Bitbucket Connector
+  bitbucket:
+    - name: "Bitbucket Repos"
+      identifier: "bitbucket_main"
+      description: "Bitbucket repositories"
+      url: "https://bitbucket.org/myorg"
+      validation_repo: "myorg/myrepo"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "bitbucket_token"
+      api_access:
+        type: "Token"
+        token_ref: "bitbucket_token"
+      delegate_selectors: []
+      tags:
+        scm: "bitbucket"
+  
+  # ===== ARTIFACT REGISTRIES =====
+  
+  # Docker Hub
+  docker:
+    - name: "Docker Hub"
+      identifier: "dockerhub"
+      description: "Docker Hub registry"
+      registry_url: "https://index.docker.io/v2/"
+      auth_type: "UsernamePassword"
+      username: "myusername"
+      password_ref: "dockerhub_password"    # Reference to secret
+      delegate_selectors: []
+      tags:
+        registry: "docker"
+    
+    # Private Docker Registry
+    - name: "Private Registry"
+      identifier: "docker_private"
+      description: "Company private registry"
+      registry_url: "https://registry.company.com"
+      auth_type: "UsernamePassword"
+      username: "admin"
+      password_ref: "docker_private_password"
+      delegate_selectors: []
+    
+    # Anonymous Docker Access
+    - name: "Docker Anonymous"
+      identifier: "docker_anon"
+      description: "Public Docker images"
+      registry_url: "https://index.docker.io/v2/"
+      auth_type: "Anonymous"
+      delegate_selectors: []
+
+# NOTE: Connectors require corresponding secrets for authentication
+# See examples/secrets.yaml for secret configuration

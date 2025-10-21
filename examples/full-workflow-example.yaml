@@ -1,0 +1,259 @@
+# =============================================================================
+# FULL WORKFLOW EXAMPLE - Proper Resource Ordering
+# This demonstrates the correct order of resource creation with dependencies
+# =============================================================================
+
+harness:
+  account_id: "YOUR_ACCOUNT_ID"
+  api_key: "YOUR_API_KEY"
+  org_id: "default"
+
+# =============================================================================
+# STEP 1: PROJECT (Foundation - Created First)
+# =============================================================================
+project:
+  repo_name: "full_workflow_demo"
+  description: "Complete workflow demonstration with proper ordering"
+  tags:
+    demo: "full_workflow"
+    managed_by: "sdk"
+
+# =============================================================================
+# STEP 2: SECRETS (Created Before Connectors Need Them)
+# =============================================================================
+secrets:
+  text_secrets:
+    # GitHub Token - needed by GitHub connector
+    - name: "GitHub Token"
+      identifier: "github_token"
+      description: "GitHub personal access token"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "token"
+    
+    # Docker Password - needed by Docker connector
+    - name: "Docker Hub Password"
+      identifier: "dockerhub_password"
+      description: "Docker Hub password"
+      value_type: "Inline"
+      value: "<+input>"
+      secret_manager_identifier: "harnessSecretManager"
+      tags:
+        type: "password"
+
+# =============================================================================
+# STEP 3: CONNECTORS (Reference Secrets Created Above)
+# =============================================================================
+connectors:
+  # Kubernetes Connector - will be referenced by infrastructure
+  kubernetes:
+    - name: "Demo K8s Cluster"
+      identifier: "demo_k8s"
+      description: "Demo Kubernetes cluster"
+      credential_type: "InheritFromDelegate"
+      delegate_selectors: ["primary"]
+      tags:
+        environment: "demo"
+  
+  # GitHub Connector - will be referenced by service manifests
+  github:
+    - name: "GitHub Demo"
+      identifier: "github_demo"
+      description: "GitHub for manifest storage"
+      url: "https://github.com/your-org"
+      validation_repo: "your-org/your-repo"
+      authentication:
+        type: "Http"
+        spec_type: "UsernameToken"
+        username: "git"
+        token_ref: "github_token"  # ← References secret created above
+      api_access:
+        type: "Token"
+        token_ref: "github_token"  # ← References secret created above
+      delegate_selectors: []
+      execute_on_delegate: false
+      tags:
+        scm: "github"
+  
+  # Docker Connector - will be referenced by service artifacts
+  docker:
+    - name: "Docker Hub Demo"
+      identifier: "dockerhub_demo"
+      description: "Docker Hub for container images"
+      registry_url: "https://index.docker.io/v2/"
+      auth_type: "UsernamePassword"
+      username: "your-username"
+      password_ref: "dockerhub_password"  # ← References secret created above
+      delegate_selectors: []
+      tags:
+        registry: "docker"
+
+# =============================================================================
+# STEP 4: RBAC (User Groups & Service Accounts)
+# =============================================================================
+access_control:
+  user_groups:
+    - name: "Demo Team"
+      identifier: "demo_team"
+      description: "Demo team members"
+      users:
+        - your.email@company.com  # Replace with real email
+      tags:
+        team: "demo"
+  
+  service_accounts:
+    - name: "Demo CI Account"
+      identifier: "demo_ci"
+      description: "CI/CD automation account"
+      email: "demo-ci@harness.serviceaccount"
+      create_token: false
+      tags:
+        purpose: "ci"
+
+# =============================================================================
+# STEP 5: ENVIRONMENTS (Foundation for Infrastructures)
+# =============================================================================
+environments:
+  - name: "Development"
+    identifier: "dev"
+    description: "Development environment"
+    type: "PreProduction"
+    tags:
+      environment: "dev"
+    variables:
+      - name: "LOG_LEVEL"
+        value: "DEBUG"
+        type: "String"
+      - name: "REPLICAS"
+        value: "1"
+        type: "String"
+  
+  - name: "Production"
+    identifier: "prod"
+    description: "Production environment"
+    type: "Production"
+    tags:
+      environment: "prod"
+    variables:
+      - name: "LOG_LEVEL"
+        value: "INFO"
+        type: "String"
+      - name: "REPLICAS"
+        value: "3"
+        type: "String"
+
+# =============================================================================
+# STEP 6: INFRASTRUCTURES (Reference Environments & Connectors)
+# =============================================================================
+infrastructures:
+  # Dev Infrastructure - references dev environment and k8s connector
+  - name: "Dev K8s Infrastructure"
+    identifier: "dev_k8s_infra"
+    description: "Development Kubernetes infrastructure"
+    environment_ref: "dev"  # ← References environment created above
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "dev"
+    config:
+      connector_ref: "demo_k8s"  # ← References K8s connector created above
+      namespace: "development"
+      release_name: "demo-app-dev"
+      allow_simultaneous: true
+  
+  # Prod Infrastructure - references prod environment and k8s connector
+  - name: "Prod K8s Infrastructure"
+    identifier: "prod_k8s_infra"
+    description: "Production Kubernetes infrastructure"
+    environment_ref: "prod"  # ← References environment created above
+    type: "KubernetesDirect"
+    deployment_type: "Kubernetes"
+    tags:
+      environment: "prod"
+    config:
+      connector_ref: "demo_k8s"  # ← References K8s connector created above
+      namespace: "production"
+      release_name: "demo-app-prod"
+      allow_simultaneous: false
+
+# =============================================================================
+# STEP 7: SERVICES (Reference Connectors for Manifests & Artifacts)
+# =============================================================================
+services:
+  - name: "Demo Application"
+    identifier: "demo_app"
+    description: "Demo application service"
+    type: "Kubernetes"
+    tags:
+      component: "app"
+    config:
+      manifests:
+        - identifier: "app_manifests"
+          type: "K8sManifest"
+          connector_ref: "github_demo"  # ← References GitHub connector
+          git_details:
+            branch: "main"
+            paths:
+              - "k8s/app/"
+      artifacts:
+        - identifier: "app_image"
+          type: "DockerRegistry"
+          connector_ref: "dockerhub_demo"  # ← References Docker connector
+          image_path: "library/nginx"  # Using public nginx as example
+
+# =============================================================================
+# STEP 8: PIPELINES (Reference Templates)
+# =============================================================================
+# Note: Requires pipeline templates to exist in Harness
+pipelines:
+  dev_deployment:
+    name: "Demo Dev Deployment"
+    identifier: "demo_dev_deploy"
+    description: "Deploy to development"
+    template_ref: "basic_deployment_template"  # Replace with your template
+    version: "v1"
+    tags:
+      environment: "dev"
+
+# =============================================================================
+# EXECUTION ORDER SUMMARY
+# =============================================================================
+#
+# The SDK automatically creates resources in this order:
+#
+# 1. Project (foundation)
+# 2. Connectors (infrastructure connections)
+# 3. Secrets (credentials for connectors)
+# 4. RBAC (user groups & service accounts)
+# 5. Environments (deployment targets)
+# 6. Infrastructures (compute resources - reference environments & connectors)
+# 7. Services (applications - reference connectors for manifests & artifacts)
+# 8. Pipelines (deployment workflows)
+#
+# This ensures dependencies are created before resources that reference them.
+#
+# =============================================================================
+# DEPENDENCIES DIAGRAM
+# =============================================================================
+#
+# Project
+#   ├── Secrets
+#   │     └── referenced by → Connectors
+#   ├── Connectors
+#   │     ├── referenced by → Infrastructures (K8s connector)
+#   │     ├── referenced by → Services (GitHub for manifests)
+#   │     └── referenced by → Services (Docker for artifacts)
+#   ├── Environments
+#   │     └── referenced by → Infrastructures
+#   ├── Infrastructures
+#   │     ├── requires → Environment
+#   │     └── requires → Connector
+#   ├── Services
+#   │     ├── requires → Connector (manifests)
+#   │     └── requires → Connector (artifacts)
+#   └── Pipelines
+#         └── requires → Template (must exist in Harness)
+#
+# =============================================================================

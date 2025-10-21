@@ -1,0 +1,17 @@
+# =============================================================================
+# BASIC PROJECT EXAMPLE
+# This example shows how to create a simple project with minimal configuration
+# =============================================================================
+
+harness:
+  account_id: "YOUR_ACCOUNT_ID"  # Replace with your Harness account ID
+  api_key: "YOUR_API_KEY"        # Replace with your Harness API key
+  org_id: "default"              # Your organization ID (usually "default")
+
+# Project Configuration
+project:
+  repo_name: "my_first_project"           # Project identifier (lowercase, underscores)
+  description: "My first Harness project" # Project description
+  tags:
+    team: "platform"
+    environment: "dev"

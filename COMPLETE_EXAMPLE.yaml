@@ -380,7 +380,7 @@ access_control:
       identifier: "platform_engineers"
       description: "Platform engineering team with full access"
       users:
-        - shlomo.daari@harness.io
+        - user@company.com  # Replace with actual user email
       tags:
         team: "platform"
         access_level: "admin"
@@ -389,7 +389,7 @@ access_control:
       identifier: "developers"
       description: "Application developers"
       users:
-        - shlomo.daari@harness.io
+        - user@company.com  # Replace with actual user email
       tags:
         team: "development"
         access_level: "developer"
@@ -398,7 +398,7 @@ access_control:
       identifier: "operations"
       description: "Operations and SRE team"
       users:
-        - shlomo.daari@harness.io
+        - user@company.com  # Replace with actual user email
       tags:
         team: "operations"
         access_level: "operator"
